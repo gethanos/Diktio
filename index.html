@@ -1,0 +1,652 @@
+<!--
+MIT License
+
+Copyright (c) 2025 Georgalas Athanasios-Antonios (Thanos), CITEd.gr VLE
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+-->
+<!DOCTYPE html>
+<html lang="el">
+<!DOCTYPE html>
+<html lang="el">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="utf-8" />
+    <title>NetSim — Εκπαιδευτικός Προσομοιωτής Δικτύων</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="title" content="NetSim — Εκπαιδευτικός Προσομοιωτής Δικτύων" />
+    <meta name="description" content="Προσομοίωσε δίκτυα, εκτέλεσε IP, ping, DNS και άλλες λειτουργίες. Ιδανικό για εκπαίδευση σε δικτύωση και διδασκαλία." />
+    <meta name="keywords" content="network simulator, NetSim, IP, ping, DNS, routing, subnetting, εκπαιδευτικό, δίκτυα υπολογιστών, Moodle, CITEd" />
+    <meta name="author" content="Γεωργαλάς Αθανάσιος-Αντώνιος (Θάνος)" />
+    <meta name="robots" content="index, follow" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="NetSim — Εκπαιδευτικός Προσομοιωτής Δικτύων" />
+    <meta property="og:description" content="Προσομοίωσε δίκτυα, εκτέλεσε εντολές IP, ping, DNS και αξιοποίησε το εργαλείο σε εκπαιδευτικά σενάρια δικτύωσης." />
+    <meta property="og:url" content="https://vle.cited.gr/apps/netsim/" />
+    <meta property="og:site_name" content="CITEd.gr VLE" />
+    <meta property="og:image" content="https://vle.cited.gr/apps/netsim/assets/img/netsim-1200x630.jpg" />
+    <meta property="og:image:alt" content="NetSim προεπισκόπηση" />
+
+    <meta property="fb:app_id" content="5206041659521286" />
+    <meta property="article:publisher" content="https://www.facebook.com/gethanovle" />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="NetSim — Εκπαιδευτικός Προσομοιωτής Δικτύων" />
+    <meta name="twitter:description" content="Μάθε δικτύωση μέσα από έναν διαδραστικό προσομοιωτή με IP, ping, DNS, routing και subnetting." />
+    <meta name="twitter:image" content="https://vle.cited.gr/apps/netsim/assets/img/netsim-1200x630.jpg" />
+    <meta name="twitter:creator" content="@gethanovle" />
+
+    <link rel="canonical" href="https://vle.cited.gr/apps/netsim/" />
+    <link rel="manifest" href="/apps/netsim/manifest.json" />
+    <meta name="theme-color" content="#0f4c81" />
+
+    <link rel="preload" href="/apps/netsim/assets/img/vlecited-logo.png" as="image">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+    <!-- Compact Header -->
+<div class="compact-header">
+  <div class="header-top">
+    <div class="header-title">
+      <a href="https://vle.cited.gr" target="_blank" rel="noopener" class="app-logo-link">
+        <img src="assets/img/vlecited-logo.png" alt="CITEd.gr VLE" class="app-logo">
+      </a>
+
+      <div class="app-title-block">
+        <h1>Προσομοιωτής Δικτύων</h1>
+        <div class="app-subtitle-small">
+          Εργαστηριακές Ασκήσεις Δικτύων Υπολογιστών - Με Gateway & DNS
+        </div>
+      </div>
+                <div class="status-indicator">
+                    <div class="status-dot"></div>
+                    <span id="statusText">Ενεργό</span>
+                </div>
+            </div>
+            <div class="header-controls">
+                <button class="btn-compact primary" onclick="showQuickStart()">
+                    <i class="fas fa-play-circle"></i> Γρήγορη Έναρξη
+                </button>
+                <button class="btn-compact" onclick="toggleConsole()">
+                    <i class="fas fa-terminal"></i> Κονσόλα
+                </button>
+                <button class="btn-compact" onclick="showHelp()">
+                    <i class="fas fa-question-circle"></i> Βοήθεια
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Compact Controls -->
+    <div class="compact-controls">
+
+        <div class="control-group">
+
+        <div class="save-load-buttons">
+            <button id="saveWorkspaceBtn" class="btn-save"></button>
+            <button id="loadWorkspaceBtn" class="btn-load"></button>
+        </div>
+                <!-- Hidden file input for loading -->
+        <input type="file" id="workspaceFileInput" class="hidden-file-input" accept=".json">
+        </div>
+                <div class="control-group">
+            <i class="fas fa-layer-group"></i>
+            <span>Προκαθορισμένα:</span>
+            <button class="btn-compact success" id="addLanBtn">
+                <i class="fas fa-sitemap"></i> LAN
+            </button>
+            <button class="btn-compact primary" id="addWanBtn">
+                <i class="fas fa-globe"></i> WAN
+            </button>
+        </div>
+        
+        <div class="control-group">
+            <i class="fas fa-tools"></i>
+            <span>Εργαλεία:</span>
+            <button class="btn-compact" id="connectBtn">
+                <i class="fas fa-link"></i> Σύνδεση
+            </button>
+            <button class="btn-compact info" id="autoRouteBtn">
+                <i class="fas fa-route"></i> Routing
+            </button>
+            <button class="btn-compact danger" id="clearBtn">
+                <i class="fas fa-trash-alt"></i> Καθαρισμός
+            </button>
+        </div>
+        
+        <div class="control-group">
+            <i class="fas fa-vial"></i>
+            <span>Δοκιμές:</span>
+            <button class="btn-compact" id="testPingBtn">
+                <i class="fas fa-satellite-dish"></i> Ping
+            </button>
+            <button class="btn-compact info" id="testRouteBtn">
+                <i class="fas fa-exchange-alt"></i> Διαδρομή
+            </button>
+            <button class="btn-compact warning" id="testDNSBtn">
+                <i class="fas fa-search"></i> DNS
+            </button>
+            <button class="btn-compact info" id="manualDNSBtn">
+                <i class="fas fa-hand-pointer"></i> Χειροκίνητο
+            </button>
+        </div>
+        
+        <div class="control-group">
+            <i class="fas fa-play-circle"></i>
+            <span>Προσομοίωση:</span>
+            <button class="btn-compact success" id="simulateBtn">
+                <i class="fas fa-play"></i> Έναρξη
+            </button>
+            <button class="btn-compact" id="debugBtn">
+                <i class="fas fa-bug"></i> Debug
+            </button>
+        </div>
+        
+        <div class="mode-indicator" id="connectionMode">
+            <i class="fas fa-mouse-pointer"></i>
+            <span id="modeText">Επιλογή Συσκευών</span>
+        </div>
+    </div>
+    
+    <!-- Main Layout -->
+    <div class="main-layout">
+        <!-- Left Sidebar - Device Library -->
+        <div class="sidebar-left">
+            <div class="compact-device-list">
+                <div class="device-category">
+                    <div class="category-title">
+                        <i class="fas fa-network-wired"></i>
+                        Βασικές Συσκευές
+                    </div>
+                    <div class="device-grid">
+                        <div class="device-card" data-type="router" data-color="#3498db">
+                            <i class="fas fa-wifi" style="color: #3498db;"></i>
+                            <div class="device-card-name">Router</div>
+                        </div>
+                        <div class="device-card" data-type="switch" data-color="#2ecc71">
+                            <i class="fas fa-network-wired" style="color: #2ecc71;"></i>
+                            <div class="device-card-name">Switch</div>
+                        </div>
+                        <div class="device-card" data-type="computer" data-color="#e74c3c">
+                            <i class="fas fa-desktop" style="color: #e74c3c;"></i>
+                            <div class="device-card-name">Υπολογιστής</div>
+                        </div>
+                        <div class="device-card" data-type="server" data-color="#9b59b6">
+                            <i class="fas fa-server" style="color: #9b59b6;"></i>
+                            <div class="device-card-name">Server</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="device-category">
+                    <div class="category-title">
+                        <i class="fas fa-server"></i>
+                        Εξυπηρετητές
+                    </div>
+                    <div class="device-grid">
+                        <div class="device-card" data-type="dns" data-color="#9b59b6">
+                            <i class="fas fa-search" style="color: #9b59b6;"></i>
+                            <div class="device-card-name">DNS Server</div>
+                        </div>
+                        <div class="device-card" data-type="printer" data-color="#3498db">
+                            <i class="fas fa-print" style="color: #3498db;"></i>
+                            <div class="device-card-name">Εκτυπωτής</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="device-category">
+                    <div class="category-title">
+                        <i class="fas fa-cloud"></i>
+                        Εξωτερικά
+                    </div>
+                    <div class="device-grid">
+                        <div class="device-card" data-type="cloud" data-color="#f39c12">
+                            <i class="fas fa-cloud" style="color: #f39c12;"></i>
+                            <div class="device-card-name">Cloud/WAN</div>
+                        </div>
+                        <div class="device-card" data-type="firewall" data-color="#e74c3c">
+                            <i class="fas fa-shield-alt" style="color: #e74c3c;"></i>
+                            <div class="device-card-name">Firewall</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Quick Stats -->
+            <div class="quick-stats">
+                <div class="stat-item">
+                    <div class="stat-value" id="deviceCount">0</div>
+                    <div class="stat-label">Συσκευές</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="connectionCount">0</div>
+                    <div class="stat-label">Συνδέσεις</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="packetCount">0</div>
+                    <div class="stat-label">Πακέτα</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Main Workspace -->
+        <div class="workspace-container">
+            <div class="workspace" id="workspace">
+                <!-- Συσκευές θα προστεθούν εδώ -->
+            </div>
+        </div>
+        
+        <!-- Right Sidebar - Device Configuration (Hidden by default) -->
+        <div class="sidebar-right" id="deviceSidebar">
+            <div class="device-panel">
+                <div class="device-panel-header">
+                    <div class="device-panel-title">
+                        <i class="fas fa-cog"></i>
+                        <span id="devicePanelTitle">Ρυθμίσεις Συσκευής</span>
+                    </div>
+                    <button class="close-panel" onclick="closeDevicePanel()">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div id="deviceConfigContent">
+                    <!-- Device configuration will be loaded here -->
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Resizable Console -->
+    <div class="resizable-console" id="console" style="display: none;">
+        <div class="console-resize-handle"></div>
+        <div class="console-header">
+            <div class="console-title">
+                <i class="fas fa-terminal"></i>
+                Κονσόλα Σύστηματος
+            </div>
+            <div class="console-controls">
+                <button class="btn-compact" onclick="clearConsole()">
+                    <i class="fas fa-trash"></i> Καθαρισμός
+                </button>
+                <button class="btn-compact" onclick="toggleConsole()">
+                    <i class="fas fa-times"></i> Κλείσιμο
+                </button>
+            </div>
+        </div>
+        <div class="console-body" id="consoleBody">
+            <div class="log-message info">[Σύστημα] Προσομοιωτής δικτύων έτοιμος</div>
+            <div class="log-message info">[Σύστημα] Κάντε κλικ σε συσκευές για να τις προσθέσετε στο workspace</div>
+        </div>
+    </div>
+
+    <!-- Main Scripts -->
+    <script src="assets/js/workspace-manager.js"></script>
+    <script type="module" src="assets/js/main.js"></script>
+    
+    <!-- Help System -->
+    <script src="assets/js/help.js"></script>
+    
+    <!-- Global Configuration -->
+<script>
+    // Network Simulator Configuration
+    window.CONFIG = {
+        DEVICE_TYPES: {
+            'router': { icon: 'fas fa-wifi', color: '#3498db', name: 'Router' },
+            'switch': { icon: 'fas fa-network-wired', color: '#2ecc71', name: 'Switch' },
+            'computer': { icon: 'fas fa-desktop', color: '#e74c3c', name: 'Υπολογιστής' },
+            'server': { icon: 'fas fa-server', color: '#9b59b6', name: 'Server' },
+            'cloud': { icon: 'fas fa-cloud', color: '#f39c12', name: 'Cloud (WAN)' },
+            'printer': { icon: 'fas fa-print', color: '#34495e', name: 'Εκτυπωτής' },
+            'dns': { icon: 'fas fa-search', color: '#9b59b6', name: 'DNS Server' },
+            'firewall': { icon: 'fas fa-shield-alt', color: '#e74c3c', name: 'Firewall' }
+        },
+        
+        DEFAULT_LAN_RANGE: '192.168.1.0/24',
+        DEFAULT_WAN_RANGE: '203.0.113.0/24',
+        DEFAULT_DNS_SERVERS: ['8.8.8.8', '8.8.4.4'],
+        
+        SIMULATION_INTERVAL: 800,
+        PACKET_DURATION_MIN: 1500,
+        PACKET_DURATION_MAX: 2500,
+        
+        PATH_ANIMATION_DURATION: 3000,
+        DNS_QUERY_ANIMATION_DURATION: 800,
+        
+        LOG_MAX_ENTRIES: 50,
+        AUTO_SAVE_INTERVAL: 30000
+    };
+    
+    // UI Configuration (separate from network config)
+    window.UI_CONFIG = {
+        consoleHeight: 200,
+        minConsoleHeight: 100,
+        maxConsoleHeight: 600,
+        showDevicePanel: false
+    };
+    
+    // Make CONFIG available immediately
+    console.log('CONFIG loaded:', window.CONFIG ? 'Yes' : 'No');
+</script>
+
+    <!-- UI Configuration and Utilities -->
+    <script>
+        // UI Configuration
+        window.UI_CONFIG = {
+            consoleHeight: 200,
+            minConsoleHeight: 100,
+            maxConsoleHeight: 600,
+            showDevicePanel: false
+        };
+        
+        // Initialize UI when DOM is loaded
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeUI();
+            initializeConsoleResize();
+            updateNetworkStats();
+        });
+        
+        // Initialize UI components
+        function initializeUI() {
+            // Add click handlers to device cards
+          //  document.querySelectorAll('.device-card').forEach(card => {
+          //      card.addEventListener('click', function() {
+          //          const type = this.dataset.type;
+          //          const color = this.dataset.color;
+          //          if (window.uiManager && window.uiManager.addDeviceToWorkspace) {
+          //              window.uiManager.addDeviceToWorkspace(type, color);
+          //              addToConsole(`Προστέθηκε ${type} συσκευή`, 'info');
+          //          }
+          //      });
+          // });
+            
+            // Initialize buttons
+            const buttons = [
+                'addLanBtn', 'addWanBtn', 'connectBtn', 'autoRouteBtn', 'clearBtn',
+                'testPingBtn', 'testRouteBtn', 'testDNSBtn', 'manualDNSBtn',
+                'simulateBtn', 'debugBtn'
+            ];
+            
+            buttons.forEach(btnId => {
+                const btn = document.getElementById(btnId);
+                if (btn) {
+                    // Remove existing listeners to avoid duplicates
+                    const newBtn = btn.cloneNode(true);
+                    btn.parentNode.replaceChild(newBtn, btn);
+                }
+            });
+            
+            // Add system log
+            addToConsole('UI αρχικοποιήθηκε επιτυχώς', 'success');
+        }
+        
+        // Console Functions
+      function toggleConsole() {
+         const console = document.getElementById('console');
+         const consoleBody = document.getElementById('consoleBody');
+    
+          if (console.style.display === 'none') {
+             console.style.display = 'flex';
+             // Normal height by default
+             console.style.height = '200px';
+             console.style.zIndex = '1000';
+              console.classList.remove('console-fullscreen');
+              addToConsole('Κονσόλα εμφανίστηκε', 'info');
+          } else {
+             console.style.display = 'none';
+             console.classList.remove('console-fullscreen');
+         }
+      }
+        
+        function addToConsole(message, type = 'info') {
+            console.trace(`[HTML Console] Adding: ${message.substring(0, 50)}...`);
+            const consoleBody = document.getElementById('consoleBody');
+            if (!consoleBody) return;
+            
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = document.createElement('div');
+            logEntry.className = `log-message ${type}`;
+            logEntry.textContent = `[${timestamp}] ${message}`;
+            
+            consoleBody.appendChild(logEntry);
+            consoleBody.scrollTop = consoleBody.scrollHeight;
+            
+            // Keep only last 100 messages
+            const messages = consoleBody.querySelectorAll('.log-message');
+            if (messages.length > 100) {
+                for (let i = 0; i < messages.length - 100; i++) {
+                    messages[i].remove();
+                }
+            }
+        }
+        
+        function clearConsole() {
+            const consoleBody = document.getElementById('consoleBody');
+            if (consoleBody) {
+                consoleBody.innerHTML = '';
+                addToConsole('Κονσόλα καθαρίστηκε', 'info');
+            }
+        }
+        
+        // Console Resize Functionality
+        function initializeConsoleResize() {
+            const console = document.getElementById('console');
+            const resizeHandle = console.querySelector('.console-resize-handle');
+            const header = console.querySelector('.console-header');
+            
+            let isResizing = false;
+            let startY, startHeight;
+            
+            function startResize(e) {
+                isResizing = true;
+                startY = e.clientY;
+                startHeight = parseInt(getComputedStyle(console).height);
+                e.preventDefault();
+                
+                document.addEventListener('mousemove', resize);
+                document.addEventListener('mouseup', stopResize);
+            }
+            
+            function resize(e) {
+                if (!isResizing) return;
+                
+                const deltaY = startY - e.clientY;
+                const newHeight = startHeight + deltaY;
+                
+                // Constrain height
+                const clampedHeight = Math.max(
+                    window.UI_CONFIG.minConsoleHeight,
+                    Math.min(newHeight, window.UI_CONFIG.maxConsoleHeight)
+                );
+                
+                console.style.height = `${clampedHeight}px`;
+            }
+            
+            function stopResize() {
+                isResizing = false;
+                document.removeEventListener('mousemove', resize);
+                document.removeEventListener('mouseup', stopResize);
+            }
+            
+            // Add resize handlers
+            [resizeHandle, header].forEach(element => {
+                if (element) {
+                    element.addEventListener('mousedown', startResize);
+                }
+            });
+        }
+        
+function showDevicePanel(device) {
+
+    // 🚫 ΜΗΝ ανοίγεις panel όταν είμαστε σε connect / route / manual DNS
+    if (window.uiManager?.connectionMode ||
+        window.uiManager?.testMode ||
+        window.uiManager?.manualDNSMode ||
+        window.uiManager?.firstDeviceForConnection ||   // όταν έχει ήδη επιλεγεί 1η συσκευή
+        window.uiManager?.firstTestDevice ||            // για route test
+        window.uiManager?.dnsSourceDevice) {            // για manual DNS
+
+        return;
+    }
+
+    // ✅ Κανονικά ανοίγει ΜΟΝΟ όταν δεν είμαστε σε ειδικό mode
+    const sidebar = document.getElementById('deviceSidebar');
+    const title = document.getElementById('devicePanelTitle');
+    const content = document.getElementById('deviceConfigContent');
+    
+    if (sidebar && title && content) {
+        title.textContent = `Ρυθμίσεις: ${device.name}`;
+        sidebar.classList.add('active');
+        window.UI_CONFIG.showDevicePanel = true;
+
+        content.innerHTML = `
+            <div style="padding: 20px; text-align: center; color: #6c757d;">
+                <i class="fas fa-cog" style="font-size: 48px; margin-bottom: 20px; color: #bdc3c7;"></i>
+                <p>Ρυθμίσεις συσκευής θα εμφανιστούν εδώ</p>
+            </div>
+        `;
+    }
+}
+
+        
+        function closeDevicePanel() {
+            const sidebar = document.getElementById('deviceSidebar');
+            if (sidebar) {
+                sidebar.classList.remove('active');
+                window.UI_CONFIG.showDevicePanel = false;
+            }
+        }
+        
+        // Network Stats
+        function updateNetworkStats() {
+            setTimeout(() => {
+                try {
+                    if (window.deviceManager) {
+                        document.getElementById('deviceCount').textContent = window.deviceManager.devices.length;
+                    }
+                    if (window.connectionManager) {
+                        document.getElementById('connectionCount').textContent = window.connectionManager.connections.length;
+                    }
+                    if (window.simulationManager) {
+                        const packets = window.simulationManager.activePackets?.size || 0;
+                        document.getElementById('packetCount').textContent = packets;
+                    }
+                } catch (error) {
+                    console.warn('Error updating stats:', error);
+                }
+                
+                // Update every 2 seconds
+                setTimeout(updateNetworkStats, 2000);
+            }, 100);
+        }
+        
+        // Quick Start Guide
+        function showQuickStart() {
+            const messages = [
+                "1. Κάντε κλικ σε συσκευές από το αριστερό πάνελ για να τις προσθέσετε",
+                "2. Σύρετε συσκευές για να τις μετακινήσετε",
+                "3. Πατήστε 'Σύνδεση' και επιλέξτε 2 συσκευές για σύνδεση",
+                "4. Κάντε κλικ σε συσκευή για να δείτε τις ρυθμίσεις της",
+                "5. Χρησιμοποιήστε τα εργαλεία δοκιμών για ping, routing και DNS",
+                "6. Πατήστε 'Προσομοίωση' για αυτόματη κυκλοφορία δικτύου"
+            ];
+            
+            addToConsole('=== Γρήγορη Οδηγία ===', 'warning');
+            messages.forEach(msg => addToConsole(msg, 'info'));
+            addToConsole('=======================', 'warning');
+            
+            // Show console if hidden
+            toggleConsole();
+        }
+        
+        // Make functions available globally
+        window.addToConsole = addToConsole;
+        window.showDevicePanel = showDevicePanel;
+        window.closeDevicePanel = closeDevicePanel;
+        window.updateNetworkStats = updateNetworkStats;
+    </script>
+        <script>
+        // Wait for DOM to be fully loaded
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize workspace manager if simulator is available
+            if (typeof simulator !== 'undefined') {
+                window.workspaceManager = new WorkspaceManager(simulator);
+            } else if (typeof networkSimulator !== 'undefined') {
+                window.workspaceManager = new WorkspaceManager(networkSimulator);
+            } else {
+                console.warn('Simulator object not found. Make sure main.js creates a global simulator object.');
+            }
+        });
+    </script>
+<footer class="footer-clean">
+  <div class="footer-line"></div>
+
+  <div class="footer-row">
+    <div class="footer-name">
+      <span class="footer-left">
+        Γεωργαλάς Αθανάσιος-Αντώνιος (Θάνος), M.Sc., M.A., ΠΕ86
+      </span>
+      <span class="footer-right">
+        © <span id="year"></span> · CITEd.gr VLE —
+          <a href="LICENSE" target="_blank" rel="noopener" style="color: #3498db;">MIT License</a> —
+        <a href="https://vle.cited.gr/apps" target="_blank" rel="noopener">
+          https://vle.cited.gr
+        </a>
+      </span>
+    </div>
+
+    <div class="footer-icons">
+      <a class="icon" href="https://www.facebook.com/gethanovle"
+         target="_blank" rel="noopener" aria-label="Facebook">
+        <svg viewBox="0 0 24 24" width="20" height="20"
+             fill="currentColor" aria-hidden="true">
+          <path d="M22.675 0H1.325C.593 0 0 .593 0 1.325v21.35C0 23.407.593 24
+                   1.325 24h11.49v-9.294H9.847v-3.62h2.968V8.413c0-2.938
+                   1.796-4.543 4.417-4.543 1.255 0 2.334.093 2.649.135v3.07h-1.818c-1.425
+                   0-1.701.677-1.701 1.67v2.188h3.403l-.443 3.62h-2.96V24h5.803
+                   C23.407 24 24 23.407 24 22.675V1.325C24 .593 23.407 0 22.675 0z"/>
+        </svg>
+      </a>
+
+      <a class="icon" href="https://www.linkedin.com/in/georgalas"
+         target="_blank" rel="noopener" aria-label="LinkedIn">
+        <svg viewBox="0 0 24 24" width="20" height="20"
+             fill="currentColor" aria-hidden="true">
+          <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853
+                   0-2.136 1.447-2.136 2.943v5.663H9.351V9h3.414v1.561h.048c.476-.9
+                   1.637-1.852 3.369-1.852 3.604 0 4.269 2.373 4.269 5.459v6.284zM5.337
+                   7.433a2.062 2.062 0 1 1 0-4.124 2.062 2.062 0 0 1 0
+                   4.124zM7.114 20.452H3.558V9h3.556v11.452zM22.225 0H1.771C.792 0
+                   0 .792 0 1.771v20.453C0 23.208.792 24 1.771 24h20.453C23.208 24
+                   24 23.208 24 22.224V1.771C24 .792 23.208 0 22.225 0z"/>
+        </svg>
+      </a>
+    </div>
+  </div>
+</footer>
+
+<script>
+  document.getElementById('year').textContent = new Date().getFullYear();
+</script>
+
+
+</body>
+</html>
