@@ -21,7 +21,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-// Διαχείριση προσομοίωσης - ΔΙΟΡΘΩΜΕΝΗ ΈΚΔΟΣΗ που ΛΕΙΤΟΥΡΓΕΙ
+// Διαχείριση προσομοίωσης - ΔΙΟΡΘΩΜΕΝΗ ΈΚΔΟΣΗ με INTERNET ACCESS
 class SimulationManager {
     constructor(connectionManager) {
         this.connectionManager = connectionManager;
@@ -30,18 +30,18 @@ class SimulationManager {
         this.activePackets = new Set();
     }
     
-    // Έναρξη προσομοίωσης - ΠΛΗΡΩΣ ΔΙΟΡΘΩΜΕΝΗ
+    // Έναρξη προσομοίωσης
     startSimulation() {
         if (this.isSimulating) {
-            console.log("[SIM] Η προσομοίωση είναι ήδη ενεργή");
+            console.log("[ΠΡΟΣΟΜΟΙΩΣΗ] Η προσομοίωση είναι ήδη ενεργή");
             return;
         }
         
-        console.log("[SIM] Έναρξη προσομοίωσης κυκλοφορίας...");
+        console.log("[ΠΡΟΣΟΜΟΙΩΣΗ] Έναρξη προσομοίωσης κυκλοφορίας...");
         
         // Έλεγχος για συνδέσεις
         if (this.connectionManager.connections.length === 0) {
-            console.log("[SIM] Δεν υπάρχουν συνδέσεις");
+            console.log("[ΠΡΟΣΟΜΟΙΩΣΗ] Δεν υπάρχουν συνδέσεις");
             this.addLog('Δεν υπάρχουν συνδέσεις για προσομοίωση', 'warning');
             return;
         }
@@ -62,12 +62,12 @@ class SimulationManager {
         this.addLog('Ξεκίνησε η προσομοίωση κυκλοφορίας', 'success');
     }
     
-    // Δημιουργία τυχαίου πακέτου - ΔΙΟΡΘΩΜΕΝΗ
+    // Δημιουργία τυχαίου πακέτου
     generateRandomPacket() {
         const connections = this.connectionManager.connections;
         
         if (connections.length === 0) {
-            console.log("[SIM] Δεν υπάρχουν connections");
+            console.log("[ΠΡΟΣΟΜΟΙΩΣΗ] Δεν υπάρχουν συνδέσεις");
             return;
         }
         
@@ -79,7 +79,7 @@ class SimulationManager {
         const device2 = window.deviceManager.getDeviceById(randomConn.device2Id);
         
         if (!device1 || !device2) {
-            console.log("[SIM] Σφάλμα: Δεν βρέθηκαν συσκευές για τη σύνδεση");
+            console.log("[ΠΡΟΣΟΜΟΙΩΣΗ] Σφάλμα: Δεν βρέθηκαν συσκευές για τη σύνδεση");
             return;
         }
         
@@ -104,11 +104,11 @@ class SimulationManager {
                 }, Math.random() * 500 + 200);
             }
         } else {
-            console.log(`[SIM] Οι συσκευές ${fromDevice.name} και ${toDevice.name} δεν είναι συνδεδεμένες`);
+            console.log(`[ΠΡΟΣΟΜΟΙΩΣΗ] Οι συσκευές ${fromDevice.name} και ${toDevice.name} δεν είναι συνδεδεμένες`);
         }
     }
     
-    // Δημιουργία απλού πακέτου (ευθεία γραμμή) - ΑΥΤΗ Η ΜΕΘΟΔΟΣ ΛΕΙΤΟΥΡΓΕΙ
+    // Δημιουργία απλού πακέτου (ευθεία γραμμή)
     createSimplePacket(fromDevice, toDevice) {
         if (!fromDevice || !toDevice || fromDevice.id === toDevice.id) {
             return;
@@ -202,7 +202,7 @@ class SimulationManager {
     stopSimulation() {
         if (!this.isSimulating) return;
         
-        console.log("[SIM] Διακοπή προσομοίωσης...");
+        console.log("[ΠΡΟΣΟΜΟΙΩΣΗ] Διακοπή προσομοίωσης...");
         
         this.isSimulating = false;
         if (this.packetInterval) {
@@ -222,7 +222,7 @@ class SimulationManager {
         this.activePackets.clear();
     }
     
-    // Δημιουργία ping πακέτου (υπάρχουσα λειτουργία)
+    // Δημιουργία ping πακέτου
     createPingPacket(fromDevice, toDevice, path = null) {
         const packetId = `ping-${Date.now()}`;
         
@@ -259,7 +259,7 @@ class SimulationManager {
         }
     }
     
-    // Κίνηση ping πακέτου (υπάρχουσα λειτουργία)
+    // Κίνηση ping πακέτου
     animatePingPacket(packet, startX, startY, endX, endY) {
         const startTime = packet.startTime;
         const duration = packet.duration;
@@ -295,7 +295,7 @@ class SimulationManager {
         requestAnimationFrame(updatePosition);
     }
     
-    // Οπτικοποίηση διαδρομής (υπάρχουσα λειτουργία)
+    // Οπτικοποίηση διαδρομής
     visualizePath(path, fromDevice, toDevice) {
         document.querySelectorAll('.path-visual').forEach(el => el.remove());
         
@@ -338,7 +338,7 @@ class SimulationManager {
         }, window.CONFIG.PATH_ANIMATION_DURATION);
     }
     
-    // Κίνηση πακέτου σε διαδρομή (υπάρχουσα λειτουργία)
+    // Κίνηση πακέτου σε διαδρομή
     animatePathPacketWithPath(packetId, path, fromDevice, toDevice) {
         if (path.length < 2) return;
         
@@ -351,7 +351,7 @@ class SimulationManager {
         this.animatePathSegment(packetEl, path, 0);
     }
     
-    // Κίνηση πακέτου σε τμήμα διαδρομής (υπάρχουσα λειτουργία)
+    // Κίνηση πακέτου σε τμήμα διαδρομής
     animatePathSegment(packetEl, path, segmentIndex) {
         if (segmentIndex >= path.length - 1) {
             setTimeout(() => {
@@ -399,7 +399,7 @@ class SimulationManager {
         requestAnimationFrame(animate);
     }
     
-    // Τoggle προσομοίωσης (υπάρχουσα λειτουργία)
+    // Τoggle προσομοίωσης
     toggleSimulation() {
         try {
             if (this.isSimulating) {
@@ -415,7 +415,19 @@ class SimulationManager {
         }
     }
     
-    // Δοκιμή ping από συγκεκριμένη συσκευή (ΝΕΑ - ΔΙΟΡΘΩΜΕΝΗ για να μην λέει "ΕΠΙΤΥΧΙΑ" αν δεν υπάρχει IP)
+    // Έλεγχος αν IP είναι εξωτερική (Internet)
+    isExternalIP(ip) {
+        if (!ip || ip === 'N/A') return false;
+        
+        const privateRanges = [
+            /^10\./, /^172\.(1[6-9]|2[0-9]|3[0-1])\./, /^192\.168\./,
+            /^127\./, /^169\.254\./, /^203\.0\.113\./
+        ];
+        
+        return !privateRanges.some(regex => regex.test(ip));
+    }
+    
+    // Δοκιμή ping από συγκεκριμένη συσκευή
     testPingFromDeviceWithPrompt(fromDevice, deviceManager) {
         return new Promise((resolve) => {
             const devices = deviceManager.devices;
@@ -458,9 +470,18 @@ class SimulationManager {
             // Επεξεργασία εισόδου
             const input = userInput.trim();
             
-            // Έλεγχος αν είναι αριθμός
-            const selectedIndex = parseInt(input) - 1;
-            if (!isNaN(selectedIndex) && selectedIndex >= 0 && selectedIndex < availableDevices.length) {
+            // Έλεγχος για αριθμό
+            let selectedIndex = null;
+            
+            // ΜΟΝΟ αν το input είναι αποκλειστικά ψηφία
+            if (/^\d+$/.test(input)) {
+                const num = parseInt(input, 10);
+                if (num >= 1 && num <= availableDevices.length) {
+                    selectedIndex = num - 1;
+                }
+            }
+            
+            if (selectedIndex !== null) {
                 // Επιλογή συσκευής από τη λίστα
                 const targetDevice = availableDevices[selectedIndex];
                 this.addLog(`Επιλέχθηκε: ${targetDevice.name} (${targetDevice.ip})`, 'info');
@@ -482,13 +503,13 @@ class SimulationManager {
                         // Αναζήτηση διαδρομής (ακόμα και αν δεν υπάρχει συσκευή)
                         const commInfo = this.connectionManager.canDevicesCommunicateWithPath(
                             fromDevice, 
-                            { ip: input, type: 'external', name: `External ${input}` }
+                            { ip: input, type: 'external', name: `Εξωτερικό ${input}` }
                         );
                         
                         if (commInfo.canCommunicate && commInfo.path) {
                             // Μπορεί να φτάσει (π.χ. μέσω gateway) αλλά δεν υπάρχει συσκευή
                             this.addLog(`Η συσκευή ${fromDevice.name} μπορεί να φτάσει στην IP ${input} (δεν υπάρχει συσκευή)`, 'warning');
-                            this.visualizePath(commInfo.path, fromDevice, { name: `External ${input}`, x: 100, y: 100 });
+                            this.visualizePath(commInfo.path, fromDevice, { name: `Εξωτερικό ${input}`, x: 100, y: 100 });
                             resolve({ success: true, viaGateway: commInfo.viaGateway, external: true });
                         } else {
                             // Δεν μπορεί να φτάσει
@@ -497,7 +518,7 @@ class SimulationManager {
                         }
                     }
                 } else {
-                    alert(`Μη έγκυρη είσοδος: "${input}"\n\nΕισάγετε αριθμό από τη λίστα ή έγκυρη IP διεύθυνση.`);
+                    alert(`Μη έγκυρη είσοδος: "${input}"\n\nΕισάγετε:\n1. Αριθμό από 1 έως ${availableDevices.length} (για συσκευή)\n2. Έγκυρη IP διεύθυνση (π.χ. 192.168.1.1)`);
                     this.addLog(`Μη έγκυρη είσοδος: ${input}`, 'error');
                     resolve({ success: false, error: 'Invalid input' });
                 }
@@ -505,33 +526,154 @@ class SimulationManager {
         });
     }
     
-    // Δοκιμή ping μεταξύ δύο συσκευών (με βελτίωση για routers)
-    testPing(fromDevice, toDevice) {
-        const communication = this.connectionManager.canDevicesCommunicateWithPath(fromDevice, toDevice);
+// Δοκιμή ping μεταξύ δύο συσκευών (με ολόκληρη διαδρομή μέχρι το Cloud)
+testPing(fromDevice, toDevice) {
+    console.log(`[PING] Έλεγχος: ${fromDevice.name} → ${toDevice.name}`);
+    
+    const fromIP = this.getIPForLog(fromDevice);
+    const toIP = this.getIPForLog(toDevice);
+    
+    console.log(`[PING] Από IP: ${fromIP}, Προς IP: ${toIP}`);
+    
+    // ΕΙΔΙΚΟΣ ΕΛΕΓΧΟΣ για εξωτερικές IP (Internet)
+    if (this.isExternalIP(toIP)) {
+        console.log(`[PING] Το ${toIP} είναι ΕΞΩΤΕΡΙΚΟ IP (Internet)`);
         
-        // Βρες τα IP για το log
-        const fromIP = this.getIPForLog(fromDevice);
-        const toIP = this.getIPForLog(toDevice);
+        // 1. Έλεγχος αν η συσκευή έχει gateway
+        const fromGatewayIP = fromDevice.gateway || 
+                             (fromDevice.interfaces?.lan?.gateway) || 
+                             (fromDevice.interfaces?.wan?.gateway);
         
-        if (communication.canCommunicate) {
-            if (communication.viaGateway) {
-                this.addLog(`PING ${fromDevice.name} (${fromIP}) → ${toDevice.name} (${toIP}) ΜΕΣΩ GATEWAY - ΕΠΙΤΥΧΙΑ`, 'success');
+        console.log(`[PING] Gateway συσκευής: ${fromGatewayIP}`);
+        
+        if (fromGatewayIP && fromGatewayIP !== '0.0.0.0' && fromGatewayIP !== 'N/A') {
+            const gatewayDevice = window.deviceManager.getDeviceByIP(fromGatewayIP);
+            
+            if (gatewayDevice && gatewayDevice.type === 'router') {
+                console.log(`[PING] Το gateway είναι router: ${gatewayDevice.name}`);
+                
+                // 2. Βρες ποιος router είναι ΣΥΝΔΕΔΕΜΕΝΟΣ με το Cloud (8.8.8.8)
+                const allRouters = window.deviceManager.devices.filter(d => d.type === 'router');
+                let cloudRouter = null;
+                
+                for (const router of allRouters) {
+                    if (this.connectionManager.areDevicesConnected(router, toDevice)) {
+                        console.log(`[PING] Ο ${router.name} είναι ΣΥΝΔΕΔΕΜΕΝΟΣ με το Cloud`);
+                        cloudRouter = router;
+                        break;
+                    }
+                }
+                
+                if (!cloudRouter) {
+                    console.log(`[PING] Κανένας router δεν είναι συνδεδεμένος με το Cloud`);
+                    this.addLog(`PING ${fromDevice.name} (${fromIP}) → ${toIP} - ΑΠΟΤΥΧΙΑ (Δεν υπάρχει Cloud)`, 'error');
+                    return { success: false, external: true };
+                }
+                
+                console.log(`[PING] Το Cloud είναι συνδεδεμένο με: ${cloudRouter.name}`);
+                
+                // 3. Βρες την ΟΛΟΚΛΗΡΗ διαδρομή: PC → Gateway Router → Cloud Router → Cloud
+                const path1 = this.connectionManager.findPathBetweenDevices(fromDevice, gatewayDevice);
+                const path2 = this.connectionManager.findPathBetweenDevices(gatewayDevice, cloudRouter);
+                
+                if (path1 && path2) {
+                    // Συνένωση διαδρομών (χωρίς διπλό gatewayDevice)
+                    const fullPath = [
+                        ...path1.slice(0, -1), // Πάρε όλα εκτός από το τελευταίο (gatewayDevice)
+                        ...path2,              // Πρόσθεσε όλη τη 2η διαδρομή
+                        toDevice               // Προσθέσε το Cloud στο τέλος
+                    ];
+                    
+                    // Αφαίρεση διπλότυπων συσκευών
+                    const uniquePath = [];
+                    const seenIds = new Set();
+                    
+                    for (const device of fullPath) {
+                        if (!seenIds.has(device.id)) {
+                            seenIds.add(device.id);
+                            uniquePath.push(device);
+                        }
+                    }
+                    
+                    console.log(`[PING] Πλήρης διαδρομή: ${uniquePath.map(d => d.name).join(' → ')}`);
+                    
+                    // 4. Έλεγχος αν ο Cloud Router έχει πρόσβαση στο Internet
+                    const routerWanIP = cloudRouter.interfaces.wan.ip;
+                    const routerWanGateway = cloudRouter.interfaces.wan.gateway;
+                    
+                    console.log(`[PING] Cloud Router WAN: ${routerWanIP}, Gateway: ${routerWanGateway}`);
+                    
+                    let internetAccessMsg = '';
+                    if (routerWanIP !== 'N/A' && routerWanGateway !== '0.0.0.0') {
+                        internetAccessMsg = ` (Internet access via ${routerWanGateway})`;
+                    } else if (cloudRouter.routingTable && cloudRouter.routingTable.some(route => 
+                        route.destination === '0.0.0.0/0' || route.destination === '0.0.0.0')) {
+                        internetAccessMsg = ' (via default route)';
+                    }
+                    
+                    this.addLog(`PING ${fromDevice.name} (${fromIP}) → ${toIP} - ΕΠΙΤΥΧΙΑ${internetAccessMsg}`, 'success');
+                    
+                    // 5. ΟΠΤΙΚΟΠΟΙΗΣΗ ΟΛΗΣ ΤΗΣ ΔΙΑΔΡΟΜΗΣ!
+                    this.visualizePath(uniquePath, fromDevice, toDevice);
+                    
+                    // 6. Αναλυτικό log για τη διαδρομή
+                    setTimeout(() => {
+                        this.addLog(`Διαδρομή: ${uniquePath.map(d => d.name).join(' → ')}`, 'info');
+                        
+                        if (cloudRouter.id !== gatewayDevice.id) {
+                            this.addLog(`Routing: ${gatewayDevice.name} → ${cloudRouter.name} → Cloud`, 'info');
+                        } else {
+                            this.addLog(`Routing: ${gatewayDevice.name} → Cloud`, 'info');
+                        }
+                    }, 500);
+                    
+                    return { 
+                        success: true, 
+                        viaGateway: true, 
+                        external: true,
+                        requiresNAT: true,
+                        path: uniquePath,
+                        gateway: gatewayDevice.name,
+                        cloudRouter: cloudRouter.name
+                    };
+                } else {
+                    console.log(`[PING] Δεν βρέθηκε πλήρης διαδρομή`);
+                    if (!path1) console.log(`[PING] Δεν υπάρχει διαδρομή προς ${gatewayDevice.name}`);
+                    if (!path2) console.log(`[PING] Δεν υπάρχει διαδρομή από ${gatewayDevice.name} προς ${cloudRouter.name}`);
+                }
             } else {
-                this.addLog(`PING ${fromDevice.name} (${fromIP}) → ${toDevice.name} (${toIP}) - ΕΠΙΤΥΧΙΑ`, 'success');
+                console.log(`[PING] Το gateway ${fromGatewayIP} δεν είναι router ή δεν βρέθηκε`);
             }
-            
-            if (communication.path) {
-                this.addLog(`Διαδρομή: ${communication.path.map(d => d.name).join(' → ')}`, 'info');
-                this.visualizePath(communication.path, fromDevice, toDevice);
-            }
-            
-            this.createPingPacket(fromDevice, toDevice, communication.path);
-            return { success: true, viaGateway: communication.viaGateway, path: communication.path };
         } else {
-            this.addLog(`PING ${fromDevice.name} (${fromIP}) → ${toDevice.name} (${toIP}) - ΑΠΟΤΥΧΙΑ`, 'error');
-            return { success: false };
+            console.log(`[PING] Η συσκευή ΔΕΝ έχει gateway ρυθμισμένο`);
         }
+        
+        this.addLog(`PING ${fromDevice.name} (${fromIP}) → ${toIP} - ΑΠΟΤΥΧΙΑ (Δεν υπάρχει πρόσβαση)`, 'error');
+        return { success: false, external: true };
     }
+    
+    // Κανονικός έλεγχος για LAN pings
+    const communication = this.connectionManager.canDevicesCommunicateWithPath(fromDevice, toDevice);
+    
+    if (communication.canCommunicate) {
+        if (communication.viaGateway) {
+            this.addLog(`PING ${fromDevice.name} (${fromIP}) → ${toDevice.name} (${toIP}) ΜΕΣΩ GATEWAY - ΕΠΙΤΥΧΙΑ`, 'success');
+        } else {
+            this.addLog(`PING ${fromDevice.name} (${fromIP}) → ${toDevice.name} (${toIP}) - ΕΠΙΤΥΧΙΑ`, 'success');
+        }
+        
+        if (communication.path) {
+            this.addLog(`Διαδρομή: ${communication.path.map(d => d.name).join(' → ')}`, 'info');
+            this.visualizePath(communication.path, fromDevice, toDevice);
+        }
+        
+        this.createPingPacket(fromDevice, toDevice, communication.path);
+        return { success: true, viaGateway: communication.viaGateway, path: communication.path };
+    } else {
+        this.addLog(`PING ${fromDevice.name} (${fromIP}) → ${toDevice.name} (${toIP}) - ΑΠΟΤΥΧΙΑ`, 'error');
+        return { success: false };
+    }
+}
     
     // Βοηθητική συνάρτηση για IP στο log
     getIPForLog(device) {
@@ -546,7 +688,7 @@ class SimulationManager {
         return device.ip || 'N/A';
     }
     
-    // Δοκιμή ping μεταξύ τυχαίων συσκευών (υπάρχουσα λειτουργία)
+    // Δοκιμή ping μεταξύ τυχαίων συσκευών
     testPingBetweenDevices(deviceManager) {
         const devices = deviceManager.devices;
         if (devices.length < 2) {
@@ -562,7 +704,7 @@ class SimulationManager {
         return this.testPing(device1, device2);
     }
     
-    // Δοκιμή επικοινωνίας μεταξύ δύο συσκευών (υπάρχουσα λειτουργία)
+    // Δοκιμή επικοινωνίας μεταξύ δύο συσκευών
     testCommunicationBetween(device1, device2) {
         const communication = this.connectionManager.canDevicesCommunicateWithPath(device1, device2);
         
@@ -586,7 +728,7 @@ class SimulationManager {
         if (typeof window.addLog === 'function') {
             window.addLog(message, type);
         } else {
-            console.log(`[SIM ${type.toUpperCase()}] ${message}`);
+            console.log(`[ΠΡΟΣΟΜΟΙΩΣΗ ${type.toUpperCase()}] ${message}`);
         }
     }
 }
