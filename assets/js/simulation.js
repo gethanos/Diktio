@@ -532,8 +532,6 @@ testPing(fromDevice, toDevice) {
     const fromIP = this.getIPForLog(fromDevice);
     const toIP = this.getIPForLog(toDevice);
 
-    console.log(`[PING] Από IP: ${fromIP}, Προς IP: ${toIP}`);
-
     // Helper για IP/Subnet
     const ipToInt = ip => ip.split('.').reduce((acc, val) => (acc << 8) + (+val), 0);
     const inSameSubnet = (ip1, mask1, ip2, mask2) => {
@@ -566,17 +564,12 @@ testPing(fromDevice, toDevice) {
         if (gatewayDevice && gatewayDevice.type === 'router') {
             console.log(`[PING] Το gateway είναι router: ${gatewayDevice.name}`);
 
-            // Path από απόDevice προς gateway
+            // Path από fromDevice προς gateway
             const pathToGateway = this.connectionManager.findPathBetweenDevices(fromDevice, gatewayDevice);
-            // Path από gateway προς ύψος
+            // Path από gateway προς toDevice
             const pathFromGateway = this.connectionManager.findPathBetweenDevices(gatewayDevice, toDevice);
 
-            if (
-                pathToGateway &&
-                pathFromGateway &&
-                pathToGateway.length > 0 &&
-                pathFromGateway.length > 0
-            ) {
+            if (pathToGateway && pathFromGateway && pathToGateway.length > 0 && pathFromGateway.length > 0) {
                 // Ενοποίηση διαδρομής (χωρίς διπλότυπο gateway)
                 if (pathToGateway[pathToGateway.length - 1].id === pathFromGateway[0].id) {
                     finalPath = [...pathToGateway, ...pathFromGateway.slice(1)];
@@ -587,8 +580,8 @@ testPing(fromDevice, toDevice) {
                 this.addLog(`PING ${fromDevice.name} (${fromIP}) → ${toDevice.name} (${toIP}) ΜΕΣΩ GATEWAY (${gatewayDevice.name}) - ΕΠΙΤΥΧΙΑ`, 'success');
                 this.addLog(`Διαδρομή: ${finalPath.map(d => d.name).join(' → ')}`, 'info');
                 console.log(`[PING] Πλήρης διαδρομή (μέσω gateway):`, finalPath.map(d => d.name).join(' → '));
-                this.visualizePath(finalPath, fromDevice, toDevice);
-                this.createPingPacket(fromDevice, toDevice, finalPath);
+                // ====== SWAP: Καλούμε ΜΟΝΟ το createPingPacket ΜΕ ΧΩΡΙΣ PATH (direct animation) ======
+                this.createPingPacket(fromDevice, toDevice);
                 return { success: true, viaGateway: true, path: finalPath };
             } else {
                 console.log(`[PING] Δεν βρέθηκε πλήρης διαδρομή μέσω gateway`);
@@ -612,12 +605,11 @@ testPing(fromDevice, toDevice) {
             }
 
             if (communication.path) {
-                this.visualizePath(communication.path, fromDevice, toDevice);
                 this.addLog(`Διαδρομή: ${communication.path.map(d => d.name).join(' → ')}`, 'info');
                 console.log(`[PING] Πλήρης διαδρομή: ${communication.path.map(d => d.name).join(' → ')}`);
             }
-
-            this.createPingPacket(fromDevice, toDevice, communication.path);
+            // ====== SWAP: Εδώ ΔΕΝ κάνουμε visualizePath! ======
+            this.createPingPacket(fromDevice, toDevice);
             return { success: true, viaGateway: communication.viaGateway, path: communication.path };
         } else {
             console.log(`[PING] Αποτυχία επικοινωνίας: δεν υπάρχει διαδρομή`);
@@ -656,13 +648,60 @@ testPing(fromDevice, toDevice) {
     }
     
     // Δοκιμή επικοινωνίας μεταξύ δύο συσκευών
-    testCommunicationBetween(device1, device2) {
-        const communication = this.connectionManager.canDevicesCommunicateWithPath(device1, device2);
-        
+testCommunicationBetween(device1, device2) {
+    // Βασική λογική "ping", για εύρεση σωστής διαδρομής (με router όπου διαφορετικά subnets)
+    const ipToInt = ip => ip.split('.').reduce((acc, val) => (acc << 8) + (+val), 0);
+    const inSameSubnet = (ip1, mask1, ip2, mask2) => {
+        if (!ip1 || !mask1 || !ip2 || !mask2) return false;
+        return (ipToInt(ip1) & ipToInt(mask1)) === (ipToInt(ip2) & ipToInt(mask2));
+    };
+
+    let requiresGateway = false;
+    if (
+        device1.gateway &&
+        device1.gateway !== '0.0.0.0' &&
+        device1.gateway !== 'N/A' &&
+        (!inSameSubnet(device1.ip, device1.subnetMask, device2.ip, device2.subnetMask || device1.subnetMask))
+    ) {
+        requiresGateway = true;
+    }
+
+    let finalPath = null;
+    if (requiresGateway) {
+        // Gateway device
+        const fromGatewayIP = device1.gateway ||
+            (device1.interfaces?.lan?.gateway) ||
+            (device1.interfaces?.wan?.gateway);
+        const gatewayDevice = window.deviceManager.getDeviceByIP(fromGatewayIP);
+
+        if (gatewayDevice && gatewayDevice.type === 'router') {
+            // Path από device1 προς gateway
+            const pathToGateway = window.connectionManager.findPathBetweenDevices(device1, gatewayDevice);
+            // Path από gateway προς device2
+            const pathFromGateway = window.connectionManager.findPathBetweenDevices(gatewayDevice, device2);
+
+            if (pathToGateway && pathFromGateway && pathToGateway.length > 0 && pathFromGateway.length > 0) {
+                if (pathToGateway[pathToGateway.length - 1].id === pathFromGateway[0].id) {
+                    finalPath = [...pathToGateway, ...pathFromGateway.slice(1)];
+                } else {
+                    finalPath = [...pathToGateway, ...pathFromGateway];
+                }
+                const viaText = "ΜΕΣΩ GATEWAY/ROUTER";
+                this.addLog(`ΔΟΚΙΜΗ: ${device1.name} → ${device2.name} - ΕΠΙΤΥΧΙΑ ${viaText}`, "success");
+                this.addLog(`Διαδρομή: ${finalPath.map(d => d.name).join(' → ')}`, "info");
+                this.visualizePath(finalPath, device1, device2); // HOP-BY-HOP animation
+                return { success: true, viaGateway: true, path: finalPath };
+            }
+        }
+        // FAIL CASE (no router found)
+        this.addLog(`ΔΟΚΙΜΗ: ${device1.name} → ${device2.name} - ΑΠΟΤΥΧΙΑ (δεν υπάρχει διαδρομή μέσω gateway)`, 'error');
+        return { success: false, viaGateway: true };
+    } else {
+        // Χωρίς gateway—ίδιο subnet
+        const communication = window.connectionManager.canDevicesCommunicateWithPath(device1, device2);
         if (communication.canCommunicate) {
-            const viaText = communication.viaGateway ? 'ΜΕΣΩ GATEWAY/ROUTING' : 'ΑΜΕΣΑ';
-            this.addLog(`ΔΟΚΙΜΗ: ${device1.name} → ${device2.name} - ΕΠΙΤΥΧΙΑ ${viaText}`, 'success');
-            
+            const viaText = communication.viaGateway ? "ΜΕΣΩ GATEWAY/ROUTING" : "ΑΜΕΣΑ";
+            this.addLog(`ΔΟΚΙΜΗ: ${device1.name} → ${device2.name} - ΕΠΙΤΥΧΙΑ ${viaText}`, "success");
             if (communication.path) {
                 this.addLog(`Διαδρομή: ${communication.path.map(d => d.name).join(' → ')}`, 'info');
                 this.visualizePath(communication.path, device1, device2);
@@ -673,7 +712,7 @@ testPing(fromDevice, toDevice) {
             return { success: false };
         }
     }
-    
+}
     // Βοηθητική συνάρτηση για logging
     addLog(message, type = 'info') {
         if (typeof window.addLog === 'function') {
