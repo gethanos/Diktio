@@ -209,45 +209,45 @@ class ConnectionManager {
         this.updateConnectionsVisual();
     }
     
-    // Ενημέρωση οπτικής αναπαράστασης συνδέσεων
-    updateConnectionsVisual() {
-        document.querySelectorAll('.connection').forEach(el => el.remove());
-        
-        this.connections.forEach(conn => {
-            const device1 = window.deviceManager.getDeviceById(conn.device1Id);
-            const device2 = window.deviceManager.getDeviceById(conn.device2Id);
-            
-            if (!device1 || !device2) return;
-            
-            const x1 = device1.x + 60;
-            const y1 = device1.y + 60;
-            const x2 = device2.x + 60;
-            const y2 = device2.y + 60;
-            
-            const length = Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2));
-            const angle = Math.atan2(y2 - y1, x2 - x1) * 180 / Math.PI;
-            
-            let colorClass;
-            if (!conn.canCommunicate) {
-                colorClass = 'invalid-connection';
-            } else if (conn.type === 'routed') {
-                colorClass = 'routed-connection';
-            } else {
-                colorClass = 'valid-connection';
-            }
-            
-            const connectionEl = document.createElement('div');
-            connectionEl.className = `connection ${colorClass}`;
-            connectionEl.id = conn.id;
-            connectionEl.style.width = `${length}px`;
-            connectionEl.style.left = `${x1}px`;
-            connectionEl.style.top = `${y1}px`;
-            connectionEl.style.transform = `rotate(${angle}deg)`;
-            
-            document.getElementById('workspace').appendChild(connectionEl);
-        });
-    }
+updateConnectionsVisual() {
+    document.querySelectorAll('.connection').forEach(el => el.remove());
     
+    this.connections.forEach(conn => {
+        const device1 = window.deviceManager.getDeviceById(conn.device1Id);
+        const device2 = window.deviceManager.getDeviceById(conn.device2Id);
+        
+        if (!device1 || !device2) return;
+        
+        const x1 = device1.x + 60;
+        const y1 = device1.y + 60;
+        const x2 = device2.x + 60;
+        const y2 = device2.y + 60;
+        
+        const length = Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2));
+        const angle = Math.atan2(y2 - y1, x2 - x1) * 180 / Math.PI;
+        
+        const isSwitch = (device) => device.type === 'switch'; // Προσθήκη εξαίρεσης για switches
+        
+        let colorClass;
+        if (!conn.canCommunicate && !(isSwitch(device1) || isSwitch(device2))) {
+            colorClass = 'invalid-connection';
+        } else if (conn.type === 'routed') {
+            colorClass = 'routed-connection';
+        } else {
+            colorClass = 'valid-connection';
+        }
+        
+        const connectionEl = document.createElement('div');
+        connectionEl.className = `connection ${colorClass}`;
+        connectionEl.id = conn.id;
+        connectionEl.style.width = `${length}px`;
+        connectionEl.style.left = `${x1}px`;
+        connectionEl.style.top = `${y1}px`;
+        connectionEl.style.transform = `rotate(${angle}deg)`;
+        
+        document.getElementById('workspace').appendChild(connectionEl);
+    });
+}    
     // Έλεγχος επικοινωνίας μεταξύ συσκευών - ΔΙΟΡΘΩΜΕΝΗ ΜΕ INTERNET ACCESS
     canDevicesCommunicateDirectly(device1, device2) {
         console.log(`[ΕΠΙΚΟΙΝΩΝΙΑ] Έλεγχος: ${device1.name} ↔ ${device2.name}`);
