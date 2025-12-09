@@ -580,6 +580,13 @@ testPing(fromDevice, toDevice) {
                 this.addLog(`PING ${fromDevice.name} (${fromIP}) → ${toDevice.name} (${toIP}) ΜΕΣΩ GATEWAY (${gatewayDevice.name}) - ΕΠΙΤΥΧΙΑ`, 'success');
                 this.addLog(`Διαδρομή: ${finalPath.map(d => d.name).join(' → ')}`, 'info');
                 console.log(`[PING] Πλήρης διαδρομή (μέσω gateway):`, finalPath.map(d => d.name).join(' → '));
+                    if (typeof window.toggleConsole === 'function') {
+                        const consoleElement = document.getElementById('console');
+                        if (consoleElement && consoleElement.style.display === 'none') {
+                            window.toggleConsole();
+                        }
+                    }
+
                 // ====== SWAP: Καλούμε ΜΟΝΟ το createPingPacket ΜΕ ΧΩΡΙΣ PATH (direct animation) ======
                 this.createPingPacket(fromDevice, toDevice);
                 return { success: true, viaGateway: true, path: finalPath };
@@ -603,7 +610,12 @@ testPing(fromDevice, toDevice) {
             } else {
                 this.addLog(`PING ${fromDevice.name} (${fromIP}) → ${toDevice.name} (${toIP}) - ΕΠΙΤΥΧΙΑ`, 'success');
             }
-
+                    if (typeof window.toggleConsole === 'function') {
+                        const consoleElement = document.getElementById('console');
+                        if (consoleElement && consoleElement.style.display === 'none') {
+                            window.toggleConsole();
+                        }
+                    }
             if (communication.path) {
                 this.addLog(`Διαδρομή: ${communication.path.map(d => d.name).join(' → ')}`, 'info');
                 console.log(`[PING] Πλήρης διαδρομή: ${communication.path.map(d => d.name).join(' → ')}`);
