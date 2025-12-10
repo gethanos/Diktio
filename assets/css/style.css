@@ -3420,3 +3420,79 @@ input[type="text"]::placeholder {
     color: #bdc3c7;
     font-size: 0.95rem;
 }
+/* Προσθήκη στο τέλος του main.css */
+
+/* Interface info styling */
+.interfaces-info {
+    margin-top: 15px;
+    padding: 10px;
+    background: #f8f9fa;
+    border-radius: 6px;
+    border-left: 4px solid #3498db;
+}
+
+.interfaces-info h4 {
+    margin: 0 0 8px 0;
+    font-size: 14px;
+    color: #2c3e50;
+    font-weight: 600;
+}
+
+.interfaces-info div {
+    font-size: 13px;
+    margin: 5px 0;
+    padding: 8px;
+    background: white;
+    border-radius: 4px;
+    border: 1px solid #dee2e6;
+}
+
+/* Router-to-router connection styles */
+.router-connection-wan {
+    border-color: #e74c3c !important;
+    box-shadow: 0 0 0 2px rgba(231, 76, 60, 0.2);
+}
+
+.router-connection-lan {
+    border-color: #27ae60 !important;
+    box-shadow: 0 0 0 2px rgba(39, 174, 96, 0.2);
+}
+
+/* Auto-routing notification */
+.auto-route-notification {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    padding: 12px 20px;
+    background: #27ae60;
+    color: white;
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    z-index: 10000;
+    animation: slideInRight 0.3s ease;
+}
+
+@keyframes slideInRight {
+    from { transform: translateX(100%); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+}
+
+/* Routing table display */
+.routing-table {
+    max-height: 200px;
+    overflow-y: auto;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    margin-top: 10px;
+}
+
+.route-item {
+    padding: 8px;
+    border-bottom: 1px solid #eee;
+    font-size: 12px;
+    font-family: monospace;
+}
+
+.route-item:last-child {
+    border-bottom: none;
+}
