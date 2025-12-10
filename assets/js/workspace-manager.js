@@ -243,6 +243,18 @@ class WorkspaceManager {
                     }
                 }
                 
+                // Καθαρισμός διπλότυπων συνδέσεων
+                setTimeout(() => {
+                    this.cleanupDuplicateConnections();
+                    
+                    // Ενημέρωση όλων των συνδέσεων
+                    if (this.simulator.connectionManager.updateAllConnections) {
+                        this.simulator.connectionManager.updateAllConnections(
+                            this.simulator.deviceManager.devices
+                        );
+                    }
+                }, 800);
+                
                 // Restore DNS records
                 if (importData.dnsRecords) {
                     Object.assign(this.simulator.dnsManager.globalDnsRecords, importData.dnsRecords);
@@ -472,8 +484,86 @@ class WorkspaceManager {
                     const device2 = this.simulator.deviceManager.getDeviceById(connData.device2Id);
                     
                     if (device1 && device2) {
-                        this.simulator.connectionManager.createConnection(device1, device2);
-                        console.log(`[WORKSPACE] Restored connection: ${device1.name} ↔ ${device2.name}`);
+                        // ***** ΑΛΛΑΓΗ ΕΔΩ - ΜΗΝ ΚΑΛΕΙΣ createConnection() *****
+                        
+                        // Έλεγχος αν υπάρχει ήδη σύνδεση με αυτό το ID
+                        const existingConnection = this.simulator.connectionManager.connections.find(
+                            c => c.id === connData.id
+                        );
+                        
+                        if (existingConnection) {
+                            console.log(`[WORKSPACE] Σύνδεση υπάρχει ήδη: ${connData.id} (${device1.name} ↔ ${device2.name})`);
+                            resolve();
+                            return;
+                        }
+                        
+                        // Έλεγχος αν υπάρχει ήδη σύνδεση μεταξύ αυτών των συσκευών
+                        const existingPairConnection = this.simulator.connectionManager.connections.find(conn => 
+                            (conn.device1Id === device1.id && conn.device2Id === device2.id) ||
+                            (conn.device1Id === device2.id && conn.device2Id === device1.id)
+                        );
+                        
+                        if (existingPairConnection) {
+                            console.log(`[WORKSPACE] Σύνδεση μεταξύ ${device1.name} και ${device2.name} υπάρχει ήδη με ID: ${existingPairConnection.id}`);
+                            
+                            // Ενημέρωσε τα devices να χρησιμοποιούν το σωστό ID
+                            if (!device1.connections) device1.connections = [];
+                            if (!device2.connections) device2.connections = [];
+                            
+                            // Αφαίρεση λανθασμένων IDs
+                            device1.connections = device1.connections.filter(id => 
+                                id === existingPairConnection.id || !id.includes('conn_')
+                            );
+                            device2.connections = device2.connections.filter(id => 
+                                id === existingPairConnection.id || !id.includes('conn_')
+                            );
+                            
+                            // Προσθήκη του σωστού ID
+                            if (!device1.connections.includes(existingPairConnection.id)) {
+                                device1.connections.push(existingPairConnection.id);
+                            }
+                            if (!device2.connections.includes(existingPairConnection.id)) {
+                                device2.connections.push(existingPairConnection.id);
+                            }
+                            
+                            resolve();
+                            return;
+                        }
+                        
+                        // Δημιουργία νέας σύνδεσης με το ID από το JSON
+                        const connection = {
+                            id: connData.id,  // ΚΡΑΤΑΜΕ ΤΟ ΙΔΙΟ ID ΑΠΟ ΤΟ JSON
+                            device1Id: device1.id,
+                            device2Id: device2.id,
+                            type: connData.type || 'direct',
+                            canCommunicate: connData.canCommunicate !== false,
+                            timestamp: connData.timestamp || new Date().toISOString(),
+                            port1: connData.port1,
+                            port2: connData.port2,
+                            status: connData.status || 'connected'
+                        };
+                        
+                        // Προσθήκη στον connection manager
+                        this.simulator.connectionManager.connections.push(connection);
+                        
+                        // Ενημέρωση των συσκευών
+                        if (!device1.connections) device1.connections = [];
+                        if (!device2.connections) device2.connections = [];
+                        
+                        // Προσθήκη του σωστού ID
+                        if (!device1.connections.includes(connData.id)) {
+                            device1.connections.push(connData.id);
+                        }
+                        if (!device2.connections.includes(connData.id)) {
+                            device2.connections.push(connData.id);
+                        }
+                        
+                        console.log(`[WORKSPACE] Δημιουργήθηκε σύνδεση: ${device1.name} ↔ ${device2.name} (ID: ${connData.id})`);
+                        
+                        // Ενημέρωση UI για τη σύνδεση
+                        this.simulator.connectionManager.updateConnectionsVisual();
+                        
+                        // ***** ΤΕΛΟΣ ΑΛΛΑΓΩΝ *****
                     } else {
                         console.warn(`[WORKSPACE] Failed to restore connection: Devices not found (${connData.device1Id}, ${connData.device2Id})`);
                     }
@@ -483,6 +573,53 @@ class WorkspaceManager {
                 resolve();
             }, 50);
         });
+    }
+
+    // Μέθοδος για καθαρισμό διπλότυπων συνδέσεων
+    cleanupDuplicateConnections() {
+        console.log('[WORKSPACE] Εκκαθάριση διπλότυπων συνδέσεων...');
+        
+        if (!this.simulator.connectionManager || !this.simulator.connectionManager.connections) {
+            return;
+        }
+        
+        const uniqueConnections = [];
+        const seenPairs = new Set();
+        const removedConnections = [];
+        
+        // Διάσχιση όλων των συνδέσεων
+        this.simulator.connectionManager.connections.forEach(connection => {
+            const pairKey = [connection.device1Id, connection.device2Id].sort().join('|');
+            
+            if (!seenPairs.has(pairKey)) {
+                seenPairs.add(pairKey);
+                uniqueConnections.push(connection);
+            } else {
+                // Αυτή είναι διπλότυπη - θα την αφαιρέσουμε
+                removedConnections.push(connection.id);
+                
+                // Αφαίρεση από τα devices
+                const device1 = this.simulator.deviceManager.getDeviceById(connection.device1Id);
+                const device2 = this.simulator.deviceManager.getDeviceById(connection.device2Id);
+                
+                if (device1 && device1.connections) {
+                    device1.connections = device1.connections.filter(id => id !== connection.id);
+                }
+                
+                if (device2 && device2.connections) {
+                    device2.connections = device2.connections.filter(id => id !== connection.id);
+                }
+            }
+        });
+        
+        // Ενημέρωση της λίστας συνδέσεων
+        this.simulator.connectionManager.connections = uniqueConnections;
+        
+        // Ενημέρωση UI
+        this.simulator.connectionManager.updateConnectionsVisual();
+        
+        console.log(`[WORKSPACE] Αφαιρέθηκαν ${removedConnections.length} διπλότυπες συνδέσεις:`, removedConnections);
+        console.log(`[WORKSPACE] Μείναν ${uniqueConnections.length} μοναδικές συνδέσεις`);
     }
 
     triggerLoad() {
