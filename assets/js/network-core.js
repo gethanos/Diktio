@@ -21,7 +21,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-// Βασικές συναρτήσεις δικτύου - ΔΙΟΡΘΩΜΕΝΕΣ
+// Βασικές συναρτήσεις δικτύου - ΔΙΟΡΘΩΜΕΝΕΣ ΚΑΙ ΕΚΤΕΤΑΜΕΝΕΣ
 
 // Μετατροπή IP σε integer
 function ipToInt(ip) {
@@ -186,6 +186,95 @@ function generateRandomSubnetMask() {
     return masks[Math.floor(Math.random() * masks.length)];
 }
 
+// ΝΕΕΣ ΣΥΝΑΡΤΗΣΕΙΣ - Προστέθηκαν από τη δεύτερη έκδοση
+
+// Έλεγχος αν η IP είναι private
+function isPrivateIP(ip) {
+    if (!ip || ip === 'N/A') return false;
+    
+    const ipInt = ipToInt(ip);
+    
+    // 10.0.0.0/8
+    if (ipInt >= ipToInt('10.0.0.0') && ipInt <= ipToInt('10.255.255.255')) {
+        return true;
+    }
+    
+    // 172.16.0.0/12
+    if (ipInt >= ipToInt('172.16.0.0') && ipInt <= ipToInt('172.31.255.255')) {
+        return true;
+    }
+    
+    // 192.168.0.0/16
+    if (ipInt >= ipToInt('192.168.0.0') && ipInt <= ipToInt('192.168.255.255')) {
+        return true;
+    }
+    
+    // 127.0.0.0/8 (Loopback)
+    if (ipInt >= ipToInt('127.0.0.0') && ipInt <= ipToInt('127.255.255.255')) {
+        return true;
+    }
+    
+    // 169.254.0.0/16 (Link-local)
+    if (ipInt >= ipToInt('169.254.0.0') && ipInt <= ipToInt('169.254.255.255')) {
+        return true;
+    }
+    
+    return false;
+}
+
+// Βρίσκει ελεύθερη διεύθυνση IP
+function getAvailableIP(baseIP, subnetMask, usedIPs = []) {
+    if (!isValidIP(baseIP) || !isValidSubnetMask(subnetMask)) {
+        return null;
+    }
+    
+    const netInfo = getNetworkInfo(baseIP, subnetMask);
+    const firstInt = ipToInt(netInfo.firstUsable);
+    const lastInt = ipToInt(netInfo.lastUsable);
+    
+    for (let ipInt = firstInt; ipInt <= lastInt; ipInt++) {
+        const potentialIP = intToIp(ipInt);
+        
+        if (!usedIPs.includes(potentialIP)) {
+            return potentialIP;
+        }
+    }
+    
+    return null;
+}
+
+// Λήψη επόμενης διαθέσιμης IP
+function getNextAvailableIP(startIP, subnetMask, usedIPs = []) {
+    if (!isValidIP(startIP) || !isValidSubnetMask(subnetMask)) {
+        return null;
+    }
+    
+    const startInt = ipToInt(startIP);
+    const netInfo = getNetworkInfo(startIP, subnetMask);
+    const firstInt = ipToInt(netInfo.firstUsable);
+    const lastInt = ipToInt(netInfo.lastUsable);
+    
+    // Ξεκινάμε από την επόμενη IP από τη startIP
+    for (let ipInt = startInt + 1; ipInt <= lastInt; ipInt++) {
+        const potentialIP = intToIp(ipInt);
+        
+        if (!usedIPs.includes(potentialIP)) {
+            return potentialIP;
+        }
+    }
+    
+    // Αν δεν βρει από εκεί και μετά, δοκιμάζει από την αρχή
+    for (let ipInt = firstInt; ipInt < startInt; ipInt++) {
+        const potentialIP = intToIp(ipInt);
+        
+        if (!usedIPs.includes(potentialIP)) {
+            return potentialIP;
+        }
+    }
+    
+    return null;
+}
+
 // Έκδοση όλων των συναρτήσεων
 export {
     ipToInt,
@@ -198,5 +287,9 @@ export {
     generateRandomIP,
     subnetMaskToCIDR,
     isIPInNetwork,
-    generateRandomSubnetMask
+    generateRandomSubnetMask,
+    // Νέες συναρτήσεις
+    isPrivateIP,
+    getAvailableIP,
+    getNextAvailableIP
 };
