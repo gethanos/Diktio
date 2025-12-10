@@ -202,18 +202,26 @@ class NetworkSimulator {
         this.dnsManager.globalDnsRecords[domain] = device.ip;
     }
     
-    createDemoConnections(router, switchDev, dnsServer, computer, server) {
-        try {
-            this.connectionManager.createConnection(router, switchDev);
-            this.connectionManager.createConnection(switchDev, dnsServer);
-            this.connectionManager.createConnection(switchDev, computer);
-            this.connectionManager.createConnection(switchDev, server);
-            this.connectionManager.updateAllConnections(this.deviceManager.devices);
-        } catch (error) {
-            this.uiManager.addLog(`Σφάλμα στη δημιουργία συνδέσεων: ${error.message}`, 'error');
+// Στο simulator.createDemoConnections() (περίπου γραμμή 180):
+createDemoConnections(router, switchDev, dnsServer, computer, server) {
+    try {
+        this.connectionManager.createConnection(router, switchDev);
+        this.connectionManager.createConnection(switchDev, dnsServer);
+        this.connectionManager.createConnection(switchDev, computer);
+        this.connectionManager.createConnection(switchDev, server);
+        
+        // Ειδική περίπτωση αν υπάρχουν 2 routers
+        const routers = this.deviceManager.devices.filter(d => d.type === 'router');
+        if (routers.length >= 2) {
+            // Σύνδεση routers (θα ζητηθεί interface από τον χρήστη)
+            this.connectionManager.createConnection(routers[0], routers[1]);
         }
+        
+        this.connectionManager.updateAllConnections(this.deviceManager.devices);
+    } catch (error) {
+        this.uiManager.addLog(`Σφάλμα στη δημιουργία συνδέσεων: ${error.message}`, 'error');
     }
-    
+}    
     // Συναρτήσεις για προκαθορισμένα δίκτυα
     createPredefinedLan() {
         this.clearWorkspace();
@@ -724,44 +732,84 @@ class NetworkSimulator {
         this.uiManager.addLog("Debug info printed to console (F12 to see)", "info");
     }
     
-    autoConfigureRouting() {
-        this.uiManager.addLog("Αυτόματη διαμόρφωση routing...", "info");
-        
-        // Βρείτε όλους τους routers
+autoConfigureRouting() {
+    console.log('[AUTO ROUTING] Έναρξη αυτόματης δημιουργίας routing tables...');
+    
+    try {
+        // 1. Βρες όλους τους routers
         const routers = this.deviceManager.devices.filter(d => d.type === 'router');
         
         if (routers.length === 0) {
-            this.uiManager.addLog("Δεν βρέθηκαν routers για αυτόματη διαμόρφωση.", "error");
-            return;
+            // Χρησιμοποιούμε το uiManager για logging
+            this.uiManager.addLog('❌ Δεν υπάρχουν routers στο δίκτυο', 'error');
+            return { success: false, message: 'No routers found' };
         }
         
-        // Διαμόρφωση όλων των συσκευών να χρησιμοποιούν τον πρώτο router ως gateway
-        const mainRouter = routers[0];
-        const lanIP = mainRouter.interfaces.lan.ip;
+        this.uiManager.addLog(`🚀 Αυτόματη δημιουργία routing tables για ${routers.length} routers...`, 'info');
         
-        if (lanIP === 'N/A' || lanIP === '0.0.0.0') {
-            this.uiManager.addLog("Ο router δεν έχει ρυθμισμένη LAN διεύθυνση.", "error");
-            return;
-        }
+        let totalRoutesCreated = 0;
+        let configuredRouters = [];
         
-        let configuredCount = 0;
-        this.deviceManager.devices.forEach(device => {
-            if (device.type !== 'router' && device.type !== 'switch' && 
-                device.ip !== 'N/A' && device.ip !== '0.0.0.0') {
+        // 2. Για κάθε router
+        routers.forEach(router => {
+            console.log(`[AUTO ROUTING] Δημιουργία routing table για ${router.name}...`);
+            
+            // Χρήση της νέας μεθόδου autoGenerateRoutesForRouter από το connectionManager
+            const routes = this.connectionManager.autoGenerateRoutesForRouter(router);
+            
+            if (routes && routes.length > 0) {
+                totalRoutesCreated += routes.length;
+                configuredRouters.push(router.name);
                 
-                // Έλεγχος αν η συσκευή είναι ήδη στο ίδιο δίκτυο με το router
-                if (!NetworkCore.areInSameNetwork(device.ip, lanIP, device.subnetMask, mainRouter.interfaces.lan.subnetMask)) {
-                    device.gateway = lanIP;
-                    configuredCount++;
-                    this.uiManager.addLog(`Ορίστηκε gateway για ${device.name}: ${lanIP}`, "info");
-                }
+                this.uiManager.addLog(`✅ ${router.name}: Δημιουργήθηκαν ${routes.length} routes`, 'success');
+                console.log(`[AUTO ROUTING] ${router.name} έχει τώρα ${routes.length} routes`);
+                
+                // Εμφάνιση των routes στο log για debugging
+                routes.forEach((route, index) => {
+                    const cidr = window.subnetMaskToCIDR ? 
+                        window.subnetMaskToCIDR(route.mask) : '24';
+                    console.log(`  ${index+1}. ${route.network}/${cidr} → ${route.gateway} (${route.interface})`);
+                });
             }
         });
         
-        this.uiManager.addLog(`Αυτόματη διαμόρφωση ολοκληρώθηκε. Ρυθμίστηκαν ${configuredCount} συσκευές.`, "success");
-        this.connectionManager.updateAllConnections(this.deviceManager.devices);
+        // 3. Ενημέρωση UI για όλους τους routers
+        setTimeout(() => {
+            routers.forEach(router => {
+                if (this.uiManager && router === this.deviceManager.selectedDevice) {
+                    this.uiManager.updateDeviceInfo(router);
+                }
+            });
+        }, 500);
+        
+        // 4. Αποτέλεσμα
+        if (totalRoutesCreated > 0) {
+            const message = `🎉 Αυτόματη διαμόρφωση ολοκληρώθηκε! Δημιουργήθηκαν ${totalRoutesCreated} routes στους routers: ${configuredRouters.join(', ')}`;
+            this.uiManager.addLog(message, 'success');
+            console.log(`[AUTO ROUTING] ${message}`);
+            
+            // Ενημέρωση όλων των συνδέσεων
+            if (this.connectionManager) {
+                this.connectionManager.updateAllConnections(this.deviceManager.devices);
+            }
+            
+            return { 
+                success: true, 
+                routesCreated: totalRoutesCreated,
+                routersConfigured: configuredRouters.length,
+                routers: configuredRouters 
+            };
+        } else {
+            this.uiManager.addLog('⚠️ Δεν δημιουργήθηκαν νέα routes. Ίσως όλα τα δίκτυα είναι ήδη connected', 'warning');
+            return { success: false, message: 'No new routes created' };
+        }
+        
+    } catch (error) {
+        console.error('[AUTO ROUTING] Σφάλμα:', error);
+        this.uiManager.addLog(`❌ Σφάλμα στην αυτόματη δημιουργία routing: ${error.message}`, 'error');
+        return { success: false, error: error.message };
     }
-    
+}    
     // Νέες μέθοδοι για UI
     updateRouterConfig(router) {
         const result = this.deviceManager.updateDeviceConfigFromUI(router);
