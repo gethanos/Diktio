@@ -205,23 +205,19 @@ class NetworkSimulator {
 // Στο simulator.createDemoConnections() (περίπου γραμμή 180):
 createDemoConnections(router, switchDev, dnsServer, computer, server) {
     try {
-        this.connectionManager.createConnection(router, switchDev);
-        this.connectionManager.createConnection(switchDev, dnsServer);
-        this.connectionManager.createConnection(switchDev, computer);
-        this.connectionManager.createConnection(switchDev, server);
+        // Χρησιμοποίησε createBasicConnection ΑΝΤΙ για createConnection
+        // για να αποφύγεις prompts
+        this.connectionManager.createBasicConnection(router, switchDev);
+        this.connectionManager.createBasicConnection(switchDev, dnsServer);
+        this.connectionManager.createBasicConnection(switchDev, computer);
+        this.connectionManager.createBasicConnection(switchDev, server);
         
-        // Ειδική περίπτωση αν υπάρχουν 2 routers
-        const routers = this.deviceManager.devices.filter(d => d.type === 'router');
-        if (routers.length >= 2) {
-            // Σύνδεση routers (θα ζητηθεί interface από τον χρήστη)
-            this.connectionManager.createConnection(routers[0], routers[1]);
-        }
+        this.connectionManager.updateConnectionsVisual();
         
-        this.connectionManager.updateAllConnections(this.deviceManager.devices);
     } catch (error) {
         this.uiManager.addLog(`Σφάλμα στη δημιουργία συνδέσεων: ${error.message}`, 'error');
     }
-}    
+}
     // Συναρτήσεις για προκαθορισμένα δίκτυα
     createPredefinedLan() {
         this.clearWorkspace();
@@ -288,104 +284,43 @@ createDemoConnections(router, switchDev, dnsServer, computer, server) {
         }, 100);
     }
     
-    createPredefinedWan() {
+async createPredefinedWan() {
+    try {
+        // ΑΚΡΙΒΩΣ ΙΔΙΟ ΜΕ ΤΟ LAN - ίδια διαδρομή
+        const response = await fetch('data/models/predefined-wan.json');
+        const jsonData = await response.json();
+        
+        console.log("1. Clearing workspace...");
         this.clearWorkspace();
-        this.uiManager.addLog('Δημιουργία προκαθορισμένου WAN δικτύου...', 'info');
+        await new Promise(resolve => setTimeout(resolve, 300));
         
-        const cloud = this.uiManager.addDeviceToWorkspace('cloud', '#f39c12');
-        const router = this.uiManager.addDeviceToWorkspace('router', '#3498db');
-        const switchDev = this.uiManager.addDeviceToWorkspace('switch', '#2ecc71');
-        const computer1 = this.uiManager.addDeviceToWorkspace('computer', '#e74c3c');
-        const server = this.uiManager.addDeviceToWorkspace('server', '#9b59b6');
-        const dnsServer = this.uiManager.addDeviceToWorkspace('dns', '#9b59b6');
+        console.log("2. Restoring devices...");
+        for (const deviceData of jsonData.devices) {
+            await window.workspaceManager.restoreDevice(deviceData);
+        }
         
+        console.log("3. Restoring connections WITHOUT createConnection...");
+        await window.workspaceManager.simpleRestoreConnections(jsonData);
+        
+        console.log("4. Checking connection count:", this.connectionManager.connections.length);
+        
+        console.log("5. Restoring DNS...");
+        if (jsonData.dnsRecords) {
+            Object.assign(this.dnsManager.globalDnsRecords, jsonData.dnsRecords);
+        }
+        
+        console.log("6. Updating visuals (without canDevicesCommunicateDirectly)...");
         setTimeout(() => {
-            this.positionDevice(cloud, 600, 150);
-            this.positionDevice(router, 300, 150);
-            this.positionDevice(switchDev, 300, 350);
-            this.positionDevice(computer1, 100, 350);
-            this.positionDevice(server, 500, 350);
-            this.positionDevice(dnsServer, 300, 550);
+            // ΜΟΝΟ οπτική ενημέρωση, ΧΩΡΙΣ επαναυπολογισμό επικοινωνίας
+            this.connectionManager.updateConnectionsVisual();
             
-            // Ρυθμίσεις Cloud
-            cloud.ip = '203.0.113.1';
-            cloud.subnetMask = '255.255.255.0';
-            cloud.dns = ['8.8.8.8'];
-            cloud.element.querySelector('.device-ip').textContent = '203.0.113.1';
-            
-            // Ρυθμίσεις Router
-            router.interfaces.wan.ip = '203.0.113.10';
-            router.interfaces.wan.subnetMask = '255.255.255.0';
-            router.interfaces.wan.gateway = '203.0.113.1';
-            router.interfaces.wan.dns = ['8.8.8.8'];
-            router.interfaces.lan.ip = '192.168.1.1';
-            router.interfaces.lan.subnetMask = '255.255.255.0';
-            router.interfaces.lan.gateway = '0.0.0.0';
-            router.interfaces.lan.dns = ['192.168.1.53'];
-            router.element.querySelector('.device-ip').innerHTML = `WAN: 203.0.113.10<br>LAN: 192.168.1.1`;
-            
-            // Ρυθμίσεις DNS Server
-            dnsServer.ip = '192.168.1.53';
-            dnsServer.subnetMask = '255.255.255.0';
-            dnsServer.gateway = '192.168.1.1';
-            dnsServer.dns = ['192.168.1.53'];
-            dnsServer.element.querySelector('.device-ip').textContent = '192.168.1.53';
-            
-            // Ρυθμίσεις Computer
-            computer1.ip = '192.168.1.10';
-            computer1.subnetMask = '255.255.255.0';
-            computer1.gateway = '192.168.1.1';
-            computer1.dns = ['192.168.1.53'];
-            computer1.element.querySelector('.device-ip').textContent = '192.168.1.10';
-            
-            // Ρυθμίσεις Server
-            server.ip = '192.168.1.100';
-            server.subnetMask = '255.255.255.0';
-            server.gateway = '192.168.1.1';
-            server.dns = ['192.168.1.53'];
-            server.element.querySelector('.device-ip').textContent = '192.168.1.100';
-            
-            setTimeout(() => {
-                this.assignDomain(server, 'webserver.local');
-                this.assignDomain(cloud, 'cloud.example.com');
-                
-                // Προσθήκη static routes για το router
-                if (!router.routingTable) router.routingTable = [];
-                router.routingTable.push({
-                    network: '203.0.113.0',
-                    mask: '255.255.255.0',
-                    gateway: '0.0.0.0',
-                    interface: 'wan'
-                });
-                router.routingTable.push({
-                    network: '192.168.1.0',
-                    mask: '255.255.255.0',
-                    gateway: '0.0.0.0',
-                    interface: 'lan'
-                });
-                
-                try {
-                    this.connectionManager.createConnection(cloud, router);
-                    this.connectionManager.createConnection(router, switchDev);
-                    this.connectionManager.createConnection(switchDev, dnsServer);
-                    this.connectionManager.createConnection(switchDev, computer1);
-                    this.connectionManager.createConnection(switchDev, server);
-                    this.connectionManager.updateAllConnections(this.deviceManager.devices);
-                    
-                    // EXTREME DEBUGGING
-                    this.debugNetworkState();
-                    
-                    this.uiManager.deviceManager.selectDevice(router);
-                    
-                    this.uiManager.addLog('Προκαθορισμένο WAN δημιουργήθηκε!', 'success');
-                    this.uiManager.addLog('Δοκιμή διαδρομής: Επιλέξτε "Δοκιμή Διαδρομής" στον υπολογιστή', 'info');
-                } catch (error) {
-                    this.uiManager.addLog(`Σφάλμα: ${error.message}`, 'error');
-                }
-            }, 100);
-        }, 100);
+            this.uiManager.addLog('Predefined WAN loaded!', 'success');
+        }, 500);
+        
+    } catch (error) {
+        this.uiManager.addLog(`Error loading WAN: ${error.message}`, 'error');
     }
-    
+}    
     clearWorkspace() {
         if (this.simulationManager.isSimulating) {
             this.simulationManager.stopSimulation();
