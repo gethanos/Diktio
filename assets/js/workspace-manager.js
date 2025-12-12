@@ -123,6 +123,8 @@ class WorkspaceManager {
                     // Router specific
                     interfaces: device.interfaces ? {...device.interfaces} : undefined,
                     routingTable: device.routingTable ? [...device.routingTable] : undefined,
+                    // ΚΡΙΤΙΚΟ: Αποθήκευση connectionInterfaces για routers
+                    connectionInterfaces: device.connectionInterfaces ? {...device.connectionInterfaces} : {},
                     // Other
                     connections: device.connections ? [...device.connections] : []
                 };
@@ -136,7 +138,10 @@ class WorkspaceManager {
                     device2Id: conn.device2Id,
                     port1: conn.port1,
                     port2: conn.port2,
-                    status: conn.status
+                    status: conn.status,
+                    // ΚΡΙΤΙΚΟ: Αποθήκευση interface types αν υπάρχουν
+                    interfaceType1: conn.interfaceType1,
+                    interfaceType2: conn.interfaceType2
                 };
             }),
             dnsRecords: this.simulator.dnsManager.globalDnsRecords ? 
@@ -224,7 +229,7 @@ class WorkspaceManager {
                 // Give time for cleanup
                 await new Promise(resolve => setTimeout(resolve, 100));
                 
-                // Restore devices with proper colors
+                // 1. RESTORE DEVICES EXACTLY AS IN JSON
                 const restoredDevices = [];
                 for (const deviceData of importData.devices) {
                     const device = await this.restoreDevice(deviceData);
@@ -233,36 +238,19 @@ class WorkspaceManager {
                     }
                 }
 
-                // Wait for devices to be fully created
-                await new Promise(resolve => setTimeout(resolve, 300));
-                
-                // Restore connections
-                if (importData.connections) {
-                    for (const connData of importData.connections) {
-                        await this.restoreConnection(connData);
-                    }
+                // 2. RESTORE CONNECTIONS SIMPLY - JUST ADD TO MANAGER
+                if (importData.connections && importData.connections.length > 0) {
+                    await this.simpleRestoreConnections(importData);
                 }
                 
-                // Καθαρισμός διπλότυπων συνδέσεων
-                setTimeout(() => {
-                    this.cleanupDuplicateConnections();
-                    
-                    // Ενημέρωση όλων των συνδέσεων
-                    if (this.simulator.connectionManager.updateAllConnections) {
-                        this.simulator.connectionManager.updateAllConnections(
-                            this.simulator.deviceManager.devices
-                        );
-                    }
-                }, 800);
-                
-                // Restore DNS records
+                // 3. Restore DNS records
                 if (importData.dnsRecords) {
                     Object.assign(this.simulator.dnsManager.globalDnsRecords, importData.dnsRecords);
                 }
                 
-                // IMPORTANT: Update connection status after everything is loaded
+                // 4. FINAL UPDATE
                 setTimeout(() => {
-                    if (this.simulator.connectionManager) {
+                    if (this.simulator.connectionManager.updateAllConnections) {
                         this.simulator.connectionManager.updateAllConnections(
                             this.simulator.deviceManager.devices
                         );
@@ -271,7 +259,6 @@ class WorkspaceManager {
                 
                 // IMPORTANT: Force update UI manager's device cache
                 if (this.simulator.uiManager.updateDeviceInfo) {
-                    // Call with null to clear any stale selection
                     this.simulator.uiManager.updateDeviceInfo(null);
                 }
                 
@@ -331,12 +318,12 @@ class WorkspaceManager {
         }
     }
 
-    // Restore a single device
+    // SIMPLE: Restore a single device
     async restoreDevice(deviceData) {
         return new Promise((resolve) => {
             setTimeout(() => {
                 try {
-                    // Create device using existing UI method with the SAME COLOR from saved data
+                    // Create device using existing UI method
                     const color = deviceData.color || this.getColorForDeviceType(deviceData.type);
                     const device = this.simulator.uiManager.addDeviceToWorkspace(
                         deviceData.type, 
@@ -359,79 +346,44 @@ class WorkspaceManager {
                             }
                         }
                         
-                        // Restore properties
+                        // RESTORE ALL PROPERTIES EXACTLY AS IN JSON
                         device.id = deviceData.id || device.id;
                         device.name = deviceData.name || device.name;
                         
                         // Network properties
-                        if (deviceData.ip) device.ip = deviceData.ip;
-                        if (deviceData.subnetMask) device.subnetMask = deviceData.subnetMask;
-                        if (deviceData.gateway) device.gateway = deviceData.gateway;
-                        if (deviceData.dns) device.dns = deviceData.dns;
-                        if (deviceData.domainName) device.domainName = deviceData.domainName;
-                        if (deviceData.status) device.status = deviceData.status;
+                        device.ip = deviceData.ip || device.ip;
+                        device.subnetMask = deviceData.subnetMask || device.subnetMask;
+                        device.gateway = deviceData.gateway || device.gateway;
+                        device.dns = deviceData.dns || device.dns;
+                        device.domainName = deviceData.domainName || device.domainName;
+                        device.status = deviceData.status || device.status;
                         
-                        // Router specific - CRITICAL: Ensure interfaces are valid
+                        // Router specific
                         if (device.type === 'router') {
                             if (deviceData.interfaces) {
                                 device.interfaces = deviceData.interfaces;
-                            } else {
-                                // Initialize router interfaces if not saved
-                                device.interfaces = device.interfaces || {
-                                    wan: { ip: 'N/A', subnetMask: '255.255.255.0', gateway: '0.0.0.0', dns: [] },
-                                    lan: { ip: '192.168.1.1', subnetMask: '255.255.255.0', gateway: '0.0.0.0', dns: [] }
-                                };
                             }
                             
-                            // Ensure both interfaces exist and have required properties
-                            if (!device.interfaces.wan) {
-                                device.interfaces.wan = { ip: 'N/A', subnetMask: '255.255.255.0', gateway: '0.0.0.0', dns: [] };
+                            // ΚΡΙΤΙΚΟ: Restore connectionInterfaces exactly
+                            if (deviceData.connectionInterfaces) {
+                                device.connectionInterfaces = { ...deviceData.connectionInterfaces };
                             }
-                            if (!device.interfaces.lan) {
-                                device.interfaces.lan = { ip: '192.168.1.1', subnetMask: '255.255.255.0', gateway: '0.0.0.0', dns: [] };
-                            }
-                            
-                            // Ensure all required fields exist
-                            device.interfaces.wan = {
-                                ip: device.interfaces.wan.ip || 'N/A',
-                                subnetMask: device.interfaces.wan.subnetMask || '255.255.255.0',
-                                gateway: device.interfaces.wan.gateway || '0.0.0.0',
-                                dns: device.interfaces.wan.dns || []
-                            };
-                            device.interfaces.lan = {
-                                ip: device.interfaces.lan.ip || '192.168.1.1',
-                                subnetMask: device.interfaces.lan.subnetMask || '255.255.255.0',
-                                gateway: device.interfaces.lan.gateway || '0.0.0.0',
-                                dns: device.interfaces.lan.dns || []
-                            };
                         }
                         
                         if (deviceData.routingTable) device.routingTable = deviceData.routingTable;
                         
-                        // Restore connections array
-                        if (deviceData.connections) device.connections = deviceData.connections;
+                        // Restore connections array EXACTLY
+                        device.connections = deviceData.connections ? [...deviceData.connections] : [];
                         
-                        // CRITICAL: Register domain name in DNS if it exists
-                        if (device.domainName && device.ip && device.ip !== 'N/A' && device.ip !== '0.0.0.0') {
-                            if (this.simulator.dnsManager) {
-                                // Check if domain already exists in DNS records
-                                if (!this.simulator.dnsManager.globalDnsRecords[device.domainName]) {
-                                    this.simulator.dnsManager.globalDnsRecords[device.domainName] = device.ip;
-                                    console.log(`[WORKSPACE] Registered domain ${device.domainName} → ${device.ip}`);
-                                } else if (this.simulator.dnsManager.globalDnsRecords[device.domainName] !== device.ip) {
-                                    console.warn(`[WORKSPACE] Domain ${device.domainName} already exists with different IP: ${this.simulator.dnsManager.globalDnsRecords[device.domainName]} vs ${device.ip}`);
-                                }
-                            }
-                        }
-                        
-                        // Force update IP display immediately
+                        // Force update IP display
                         this.updateDeviceDisplay(device, deviceData);
                         
-                        // Ensure device is not selected (as requested)
+                        // Ensure device is not selected
                         if (device.element) {
                             device.element.classList.remove('selected');
                         }
                         
+                        console.log(`[WORKSPACE] Restored device: ${device.name} with ${device.connections.length} connections`);
                         resolve(device);
                     } else {
                         console.error('[WORKSPACE] Failed to create device:', deviceData.type);
@@ -445,7 +397,7 @@ class WorkspaceManager {
         });
     }
 
-    // Update device display with saved data - SIMPLIFIED VERSION
+    // SIMPLE: Just update device display
     updateDeviceDisplay(device, deviceData) {
         if (!device.element) return;
         
@@ -469,157 +421,66 @@ class WorkspaceManager {
         if (nameElement && deviceData.name) {
             nameElement.textContent = deviceData.name;
         }
-        
-        // DO NOT add event handlers here - they're already added by devices.js
-        // when addDeviceToWorkspace was called
-        console.log(`[WORKSPACE] Display updated for ${device.name}, handlers already set by devices.js`);
     }
 
-    // Restore a single connection
-    async restoreConnection(connData) {
+    // SIMPLE: Just add connections to manager without creating new ones
+    async simpleRestoreConnections(importData) {
         return new Promise((resolve) => {
             setTimeout(() => {
                 try {
-                    const device1 = this.simulator.deviceManager.getDeviceById(connData.device1Id);
-                    const device2 = this.simulator.deviceManager.getDeviceById(connData.device2Id);
+                    console.log('[WORKSPACE] Adding connections to manager...');
                     
-                    if (device1 && device2) {
-                        // ***** ΑΛΛΑΓΗ ΕΔΩ - ΜΗΝ ΚΑΛΕΙΣ createConnection() *****
-                        
-                        // Έλεγχος αν υπάρχει ήδη σύνδεση με αυτό το ID
-                        const existingConnection = this.simulator.connectionManager.connections.find(
-                            c => c.id === connData.id
-                        );
-                        
-                        if (existingConnection) {
-                            console.log(`[WORKSPACE] Σύνδεση υπάρχει ήδη: ${connData.id} (${device1.name} ↔ ${device2.name})`);
-                            resolve();
-                            return;
-                        }
-                        
-                        // Έλεγχος αν υπάρχει ήδη σύνδεση μεταξύ αυτών των συσκευών
-                        const existingPairConnection = this.simulator.connectionManager.connections.find(conn => 
-                            (conn.device1Id === device1.id && conn.device2Id === device2.id) ||
-                            (conn.device1Id === device2.id && conn.device2Id === device1.id)
-                        );
-                        
-                        if (existingPairConnection) {
-                            console.log(`[WORKSPACE] Σύνδεση μεταξύ ${device1.name} και ${device2.name} υπάρχει ήδη με ID: ${existingPairConnection.id}`);
-                            
-                            // Ενημέρωσε τα devices να χρησιμοποιούν το σωστό ID
-                            if (!device1.connections) device1.connections = [];
-                            if (!device2.connections) device2.connections = [];
-                            
-                            // Αφαίρεση λανθασμένων IDs
-                            device1.connections = device1.connections.filter(id => 
-                                id === existingPairConnection.id || !id.includes('conn_')
-                            );
-                            device2.connections = device2.connections.filter(id => 
-                                id === existingPairConnection.id || !id.includes('conn_')
+                    let addedCount = 0;
+                    let skippedCount = 0;
+                    
+                    importData.connections.forEach(connData => {
+                        try {
+                            // Check if this connection already exists
+                            const existingConn = this.simulator.connectionManager.connections.find(
+                                conn => conn.id === connData.id
                             );
                             
-                            // Προσθήκη του σωστού ID
-                            if (!device1.connections.includes(existingPairConnection.id)) {
-                                device1.connections.push(existingPairConnection.id);
-                            }
-                            if (!device2.connections.includes(existingPairConnection.id)) {
-                                device2.connections.push(existingPairConnection.id);
+                            if (existingConn) {
+                                console.log(`[WORKSPACE] Connection already exists: ${connData.id}`);
+                                skippedCount++;
+                                return;
                             }
                             
-                            resolve();
-                            return;
+                            // Just add the connection object as-is
+                            this.simulator.connectionManager.connections.push({
+                                id: connData.id,
+                                device1Id: connData.device1Id,
+                                device2Id: connData.device2Id,
+                                port1: connData.port1,
+                                port2: connData.port2,
+                                status: connData.status || 'connected',
+                                interfaceType1: connData.interfaceType1,
+                                interfaceType2: connData.interfaceType2
+                            });
+                            
+                            addedCount++;
+                            console.log(`[WORKSPACE] Added connection: ${connData.id}`);
+                            
+                        } catch (error) {
+                            console.warn(`[WORKSPACE] Failed to add connection ${connData.id}:`, error);
+                            skippedCount++;
                         }
-                        
-                        // Δημιουργία νέας σύνδεσης με το ID από το JSON
-                        const connection = {
-                            id: connData.id,  // ΚΡΑΤΑΜΕ ΤΟ ΙΔΙΟ ID ΑΠΟ ΤΟ JSON
-                            device1Id: device1.id,
-                            device2Id: device2.id,
-                            type: connData.type || 'direct',
-                            canCommunicate: connData.canCommunicate !== false,
-                            timestamp: connData.timestamp || new Date().toISOString(),
-                            port1: connData.port1,
-                            port2: connData.port2,
-                            status: connData.status || 'connected'
-                        };
-                        
-                        // Προσθήκη στον connection manager
-                        this.simulator.connectionManager.connections.push(connection);
-                        
-                        // Ενημέρωση των συσκευών
-                        if (!device1.connections) device1.connections = [];
-                        if (!device2.connections) device2.connections = [];
-                        
-                        // Προσθήκη του σωστού ID
-                        if (!device1.connections.includes(connData.id)) {
-                            device1.connections.push(connData.id);
-                        }
-                        if (!device2.connections.includes(connData.id)) {
-                            device2.connections.push(connData.id);
-                        }
-                        
-                        console.log(`[WORKSPACE] Δημιουργήθηκε σύνδεση: ${device1.name} ↔ ${device2.name} (ID: ${connData.id})`);
-                        
-                        // Ενημέρωση UI για τη σύνδεση
+                    });
+                    
+                    console.log(`[WORKSPACE] Connections added: ${addedCount}, skipped: ${skippedCount}`);
+                    
+                    // Update visual connections
+                    if (this.simulator.connectionManager.updateConnectionsVisual) {
                         this.simulator.connectionManager.updateConnectionsVisual();
-                        
-                        // ***** ΤΕΛΟΣ ΑΛΛΑΓΩΝ *****
-                    } else {
-                        console.warn(`[WORKSPACE] Failed to restore connection: Devices not found (${connData.device1Id}, ${connData.device2Id})`);
                     }
+                    
+                    resolve();
                 } catch (error) {
-                    console.warn('Failed to restore connection:', error, connData);
+                    console.error('[WORKSPACE] Error in simpleRestoreConnections:', error);
+                    resolve();
                 }
-                resolve();
-            }, 50);
+            }, 100);
         });
-    }
-
-    // Μέθοδος για καθαρισμό διπλότυπων συνδέσεων
-    cleanupDuplicateConnections() {
-        console.log('[WORKSPACE] Εκκαθάριση διπλότυπων συνδέσεων...');
-        
-        if (!this.simulator.connectionManager || !this.simulator.connectionManager.connections) {
-            return;
-        }
-        
-        const uniqueConnections = [];
-        const seenPairs = new Set();
-        const removedConnections = [];
-        
-        // Διάσχιση όλων των συνδέσεων
-        this.simulator.connectionManager.connections.forEach(connection => {
-            const pairKey = [connection.device1Id, connection.device2Id].sort().join('|');
-            
-            if (!seenPairs.has(pairKey)) {
-                seenPairs.add(pairKey);
-                uniqueConnections.push(connection);
-            } else {
-                // Αυτή είναι διπλότυπη - θα την αφαιρέσουμε
-                removedConnections.push(connection.id);
-                
-                // Αφαίρεση από τα devices
-                const device1 = this.simulator.deviceManager.getDeviceById(connection.device1Id);
-                const device2 = this.simulator.deviceManager.getDeviceById(connection.device2Id);
-                
-                if (device1 && device1.connections) {
-                    device1.connections = device1.connections.filter(id => id !== connection.id);
-                }
-                
-                if (device2 && device2.connections) {
-                    device2.connections = device2.connections.filter(id => id !== connection.id);
-                }
-            }
-        });
-        
-        // Ενημέρωση της λίστας συνδέσεων
-        this.simulator.connectionManager.connections = uniqueConnections;
-        
-        // Ενημέρωση UI
-        this.simulator.connectionManager.updateConnectionsVisual();
-        
-        console.log(`[WORKSPACE] Αφαιρέθηκαν ${removedConnections.length} διπλότυπες συνδέσεις:`, removedConnections);
-        console.log(`[WORKSPACE] Μείναν ${uniqueConnections.length} μοναδικές συνδέσεις`);
     }
 
     triggerLoad() {
