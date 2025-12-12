@@ -1,0 +1,507 @@
+/**
+ * MIT License
+ * 
+ * Copyright (c) 2025 Georgalas Athanasios-Antonios (Thanos), CITEd.gr VLE
+ * 
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ * 
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ * 
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
+/* assets/css/mobile.css */
+/* Mobile layout – μικρά icon-only εργαλεία + μικρά icon-only συσκευές */
+
+@media (max-width: 768px) {
+
+  .device-card,
+  .compact-device-list .device-card,
+  .device-list .device-card,
+  .devices-panel .device-card,
+  .workspace .device-card,
+  .canvas .device-card,
+  [class*="device"] .device-card {
+    width: 32px !important;
+    height: 32px !important;
+    min-width: 32px !important;
+    min-height: 32px !important;
+    max-width: 32px !important;
+    max-height: 32px !important;
+    flex: 0 0 32px !important;
+    padding: 2px !important;
+    margin: 2px !important;
+  }
+  
+  /* Και για τα εσωτερικά στοιχεία */
+  .device-card i,
+  .compact-device-list .device-card i,
+  .device-list .device-card i,
+  .devices-panel .device-card i,
+  .workspace .device-card i,
+  .canvas .device-card i,
+  [class*="device"] .device-card i {
+    font-size: 1rem !important;
+    width: 100% !important;
+    height: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  
+  /* Κρύβουμε τα ονόματα */
+  .device-card-name,
+  .device-card .name,
+  .device-card .label,
+  .device-card .title,
+  .device-card > span,
+  .device-card > div:not(:first-child) {
+    display: none !important;
+  }
+  
+  /* ===== ΚΡΙΤΙΚΟ: ΕΠΙΤΡΕΠΟΥΜΕ DRAG ΣΕ ΟΛΑ ΤΑ DEVICE-CARDS ===== */
+  
+  /* Πρώτα βεβαιωνόμαστε ότι τα device-card στο workspace έχουν σωστή θέση */
+  .workspace .device-card {
+    position: absolute !important;
+    z-index: 10 !important;
+    touch-action: none !important;
+    user-select: none !important;
+    -webkit-user-select: none !important;
+    cursor: move !important;
+    pointer-events: all !important;
+  }
+  
+  /* Τα εσωτερικά στοιχεία δεν πρέπει να εμποδίζουν drag */
+  .workspace .device-card * {
+    pointer-events: none !important;
+  }
+  
+  /* Visual feedback για drag */
+  .workspace .device-card:active {
+    opacity: 0.9 !important;
+    transform: scale(0.98) !important;
+    transition: transform 0.1s !important;
+  }
+  
+  /* Κατάσταση dragging */
+  .workspace .device-card.dragging {
+    z-index: 1000 !important;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.4) !important;
+  }
+  
+  /* ===== Βασικό κλείδωμα ύψους ===== */
+
+  html,
+  body {
+    margin: 0 !important;
+    padding: 0 !important;
+    height: 100vh !important;
+    overflow: hidden !important;
+  }
+
+  body {
+    display: flex !important;
+    flex-direction: column !important;
+  }
+
+  .main-layout {
+    display: flex !important;
+    flex-direction: column !important;
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    height: calc(100vh - 56px) !important;
+    overflow: hidden !important;
+  }
+
+  /* ===== Header & controls ===== */
+
+  .compact-header {
+    padding: 6px 10px !important;
+    min-height: 56px !important;
+  }
+
+  .compact-controls {
+    padding: 6px 8px !important;
+    gap: 4px !important;
+    flex-wrap: nowrap !important;
+    overflow-x: auto !important;
+    scrollbar-width: none !important;
+  }
+
+  .compact-controls::-webkit-scrollbar {
+    display: none !important;
+  }
+
+  .control-group {
+    padding: 4px 6px !important;
+    gap: 4px !important;
+    min-width: auto !important;
+    font-size: 0.7rem !important;
+    flex: 0 0 auto !important;
+    align-items: center !important;
+  }
+
+  /* ===== Εργαλεία – icon-only ===== */
+
+  .control-group span {
+    display: none !important;              /* "Εργαλεία:" */
+  }
+
+  .control-group .btn-compact {
+    padding: 6px !important;
+    min-width: 34px !important;
+    min-height: 34px !important;
+    border-radius: 8px !important;
+    font-size: 0 !important;              /* κρύβει "Σύνδεση", "Routing", "Καθαρισμός" */
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 0 !important;
+  }
+
+  .control-group .btn-compact i {
+    font-size: 1rem !important;
+    margin: 0 !important;
+  }
+
+  .control-group > i.fas {
+    font-size: 1rem !important;
+    margin-right: 4px !important;
+  }
+
+  .quick-stats,
+  .footer-clean {
+    display: none !important;
+  }
+
+  /* ===== ΜΙΚΡΑ ΕΙΚΟΝΙΔΙΑ ΕΙΣΑΓΩΓΗΣ – ίδια με τις υπάρχουσες συσκευές ===== */
+
+  /* Η μπάρα που περιέχει τα εικονίδια εισαγωγής */
+  .import-devices-bar {
+    background: rgba(0, 0, 0, 0.35) !important;
+    backdrop-filter: blur(8px);
+    border-top: 1px solid var(--border-primary) !important;
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    padding: 8px 6px !important;
+    height: 60px !important;
+    max-height: 60px !important;
+    width: 100% !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    scrollbar-width: none !important;
+    gap: 6px !important;
+  }
+
+  .import-devices-bar::-webkit-scrollbar {
+    display: none !important;
+  }
+
+  /* Κάθε εικονίδιο εισαγωγής - ΜΙΚΡΟ, σαν device-card */
+  .import-devices-bar .import-btn,
+  .import-devices-bar > div,
+  .device-import-btn,
+  .add-device-btn {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    flex: 0 0 32px !important;           /* ΑΚΡΙΒΩΣ ίδιο με τα device-card */
+    width: 32px !important;
+    height: 32px !important;
+    min-width: 32px !important;
+    min-height: 32px !important;
+    padding: 2px !important;
+    margin: 0 2px !important;
+    border-radius: 6px !important;
+    background: rgba(255, 255, 255, 0.08) !important;
+    border: 1px solid rgba(255, 255, 255, 0.15) !important;
+    box-shadow: none !important;
+    transition: all 0.15s ease !important;
+  }
+
+  /* Hover effect - απαλό */
+  .import-devices-bar .import-btn:hover,
+  .import-devices-bar > div:hover,
+  .device-import-btn:hover,
+  .add-device-btn:hover {
+    background: rgba(255, 255, 255, 0.15) !important;
+    border-color: rgba(255, 255, 255, 0.25) !important;
+    transform: scale(1.05) !important;
+  }
+
+  /* Τα εικονίδια μέσα - ΜΙΚΡΑ, σαν τα device-card i */
+  .import-devices-bar .import-btn i,
+  .import-devices-bar > div i,
+  .device-import-btn i,
+  .add-device-btn i {
+    font-size: 1rem !important;          /* ΑΚΡΙΒΩς ίδιο μέγεθος με device-card i */
+    line-height: 1 !important;
+    margin: 0 !important;
+    color: white !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 100% !important;
+    height: 100% !important;
+  }
+
+  /* Labels - ΜΟΝΟ αν χρειάζεται, συνήθως κρύβονται */
+  .import-devices-bar .import-btn span,
+  .import-devices-bar > div span,
+  .device-import-btn span,
+  .add-device-btn span {
+    display: none !important;             /* Κρύβουμε τα labels για μικρά εικονίδια */
+  }
+
+  /* ===== Μπάρα συσκευών – ΑΥΤΟ παραμένει για τις υπάρχουσες συσκευές ===== */
+
+  .sidebar-left {
+    flex: 0 0 60px !important;
+    height: 60px !important;
+    max-height: 60px !important;
+    width: 100% !important;
+    border-top: 1px solid var(--border-primary) !important;
+    border-right: none !important;
+    margin: 0 !important;
+    background: rgba(0, 0, 0, 0.35) !important;
+    backdrop-filter: blur(8px);
+    display: flex !important;
+  }
+
+  .compact-device-list {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    padding: 8px 6px !important;
+    height: 60px !important;
+    gap: 6px !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    scrollbar-width: none !important;
+    width: 100% !important;
+  }
+
+  .compact-device-list::-webkit-scrollbar {
+    display: none !important;
+  }
+
+  .compact-device-list .device-category {
+    margin: 0 !important;
+    padding: 0 !important;
+    flex: 0 0 auto !important;
+  }
+
+  .compact-device-list .category-title {
+    display: none !important;             /* Βασικές συσκευές, κλπ */
+  }
+
+  .compact-device-list .device-grid {
+    display: flex !important;
+    flex-direction: row !important;
+    gap: 4px !important;
+  }
+
+  /* ΕΔΩ: κάθε συσκευή = πραγματικό 32×32 flex κουτάκι */
+  .compact-device-list .device-card {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: center !important;
+
+    box-sizing: border-box !important;
+    flex: 0 0 32px !important;
+    width: 32px !important;
+    height: 32px !important;
+    padding: 2px !important;
+    margin: 0 2px !important;
+    border-radius: 6px !important;
+    box-shadow: none !important;
+  }
+
+  .compact-device-list .device-card-name {
+    display: none !important;             /* Router, Switch, DNS κλπ */
+  }
+
+  .compact-device-list .device-card i {
+    font-size: 1rem !important;
+    line-height: 1 !important;
+    margin: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+  }
+
+  /* ===== ΔΙΟΡΘΩΣΗ CANVAS ΓΙΑ ΠΛΗΡΗ ΚΥΛΙΣΗ ΚΑΙ DRAG ===== */
+  
+  /* Το workspace-container πρέπει να επιτρέπει scroll */
+  .workspace-container {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: auto !important;
+    position: relative !important;
+    -webkit-overflow-scrolling: touch !important;
+    height: calc(100vh - 116px) !important; /* 56px header + 60px device bar */
+  }
+  
+  /* Το workspace πρέπει να είναι μεγαλύτερο */
+  .workspace {
+    position: relative !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: 800px !important;
+    min-width: 800px !important;
+    overflow: visible !important;
+    background: var(--workspace-bg) !important;
+    padding: 20px !important;
+    touch-action: pan-x pan-y !important; /* Επιτρέπει pan στον workspace */
+  }
+  
+  /* Canvas containers */
+  .canvas-area,
+  .network-canvas,
+  .canvas-container,
+  .cy-container {
+    width: 100% !important;
+    height: auto !important;
+    min-height: 800px !important;
+    position: relative !important;
+    overflow: visible !important;
+  }
+  
+  /* Αν το canvas έχει fixed dimensions */
+  svg.network-svg,
+  canvas.network-canvas,
+  .cytoscape-container,
+  #cy {
+    width: 100% !important;
+    height: auto !important;
+    min-height: 800px !important;
+    max-width: none !important;
+    max-height: none !important;
+  }
+  
+  /* Για scroll και προβολή όλου του canvas */
+  .workspace-container::-webkit-scrollbar {
+    width: 10px !important;
+    height: 10px !important;
+  }
+  
+  .workspace-container::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.1) !important;
+    border-radius: 5px !important;
+  }
+  
+  .workspace-container::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.3) !important;
+    border-radius: 5px !important;
+  }
+  
+  .workspace-container::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 0, 0, 0.4) !important;
+  }
+  
+  /* Αφαιρούμε περιορισμούς ύψους από canvas containers */
+  .canvas-wrapper,
+  .graph-container,
+  .network-wrapper {
+    height: auto !important;
+    min-height: 800px !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+  
+  /* Αν υπάρχει fixed height, το αφαιρούμε */
+  [style*="height:"],
+  [style*="max-height:"],
+  [style*="overflow: hidden"] {
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  /* ===== Console (μένει όπως είναι τώρα) ===== */
+
+  .resizable-console {
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 60px !important;
+    height: 160px !important;
+    max-height: 30vh !important;
+    z-index: 50 !important;
+  }
+
+  .console-header {
+    padding: 4px 8px !important;
+    font-size: 0.8rem !important;
+  }
+
+  .console-body {
+    padding: 6px !important;
+    font-size: 0.75rem !important;
+  }
+
+  /* Δεξιά sidebar ως fullscreen modal (προαιρετικό αλλά χρήσιμο στο mobile) */
+  .sidebar-right {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  .sidebar-right.active {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    z-index: 10000 !important;
+    background: rgba(0, 0, 0, 0.9) !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    backdrop-filter: blur(10px);
+  }
+
+  .device-panel {
+    width: 94vw !important;
+    max-width: 94vw !important;
+    max-height: 88vh !important;
+    border-radius: 8px !important;
+    margin: 12px !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+  
+  /* ===== ΤΕΛΙΚΕΣ ΔΙΟΡΘΩΣΕΙΣ ΓΙΑ DRAG ===== */
+  
+  /* Βεβαιωνόμαστε ότι το main-layout επιτρέπει overflow */
+  .main-layout {
+    overflow: visible !important;
+  }
+  
+  /* Αν χρησιμοποιείται κάποιο drag library */
+  .draggable,
+  .ui-draggable {
+    touch-action: none !important;
+  }
+  
+  /* Για να λειτουργεί το drag, τα parent containers δεν πρέπει να έχουν overflow:hidden */
+  body, html, .main-content, .content-area {
+    overflow: visible !important;
+  }
+}
