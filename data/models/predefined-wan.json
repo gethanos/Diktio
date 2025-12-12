@@ -1,0 +1,245 @@
+{
+  "metadata": {
+    "name": "predefined-wan.json",
+    "exportDate": "2025-12-12T15:01:09.819Z",
+    "version": "2.0",
+    "app": "Network Simulator",
+    "deviceCount": 6,
+    "connectionCount": 6
+  },
+  "devices": [
+    {
+      "id": "device-1",
+      "type": "cloud",
+      "name": "Cloud (WAN) 1",
+      "x": 600,
+      "y": 150,
+      "color": "#f39c12",
+      "ip": "203.0.113.1",
+      "subnetMask": "255.255.255.0",
+      "gateway": "0.0.0.0",
+      "dns": [
+        "8.8.8.8"
+      ],
+      "domainName": "cloud.example.com",
+      "status": "online",
+      "connectionInterfaces": {},
+      "connections": [
+        "conn_1765551270047_sbh9m0zia"
+      ]
+    },
+    {
+      "id": "device-2",
+      "type": "router",
+      "name": "Router 2",
+      "x": 301.08331298828125,
+      "y": 149.0833282470703,
+      "color": "#3498db",
+      "status": "online",
+      "interfaces": {
+        "wan": {
+          "ip": "203.0.113.10",
+          "subnetMask": "255.255.255.0",
+          "gateway": "203.0.113.1",
+          "dns": [
+            "8.8.8.8"
+          ]
+        },
+        "lan": {
+          "ip": "192.168.1.1",
+          "subnetMask": "255.255.255.0",
+          "gateway": "0.0.0.0",
+          "dns": [
+            "192.168.1.53"
+          ]
+        },
+        "lan2": {
+          "ip": "192.168.2.1",
+          "subnetMask": "255.255.255.0",
+          "gateway": "0.0.0.0",
+          "dns": [
+            "192.168.2.1"
+          ],
+          "enabled": true
+        }
+      },
+      "routingTable": [
+        {
+          "network": "203.0.113.0",
+          "mask": "255.255.255.0",
+          "gateway": "0.0.0.0",
+          "interface": "wan"
+        },
+        {
+          "network": "192.168.1.0",
+          "mask": "255.255.255.0",
+          "gateway": "0.0.0.0",
+          "interface": "lan"
+        },
+        {
+          "network": "203.0.113.0",
+          "mask": "255.255.255.0",
+          "gateway": "203.0.113.1",
+          "interface": "wan",
+          "metric": 1
+        },
+        {
+          "network": "0.0.0.0",
+          "mask": "0.0.0.0",
+          "gateway": "203.0.113.1",
+          "interface": "wan",
+          "metric": 10
+        },
+        {
+          "network": "192.168.1.0",
+          "mask": "255.255.255.0",
+          "gateway": "192.168.1.11",
+          "interface": "lan",
+          "metric": 1
+        }
+      ],
+      "connectionInterfaces": {
+        "conn_1765551055064_s5z2odbf2": "lan",
+        "conn_1765551270047_sbh9m0zia": "wan",
+        "conn_1765551327188_pwveinupf": "lan"
+      },
+      "connections": [
+        "conn_1765551055064_s5z2odbf2",
+        "conn_1765551270047_sbh9m0zia",
+        "conn_1765551327188_pwveinupf"
+      ]
+    },
+    {
+      "id": "device-3",
+      "type": "switch",
+      "name": "Switch 3",
+      "x": 299.7166748046875,
+      "y": 347.7166748046875,
+      "color": "#2ecc71",
+      "ip": "N/A",
+      "subnetMask": "255.255.255.0",
+      "gateway": "192.168.1.1",
+      "dns": [],
+      "status": "online",
+      "connectionInterfaces": {},
+      "connections": [
+        "conn_1765551034991_irotps9is",
+        "conn_1765551034992_k5lifjroi",
+        "conn_1765551034994_xgjoq0es1",
+        "conn_1765551327188_pwveinupf"
+      ]
+    },
+    {
+      "id": "device-4",
+      "type": "computer",
+      "name": "Υπολογιστής 4",
+      "x": 100,
+      "y": 350,
+      "color": "#e74c3c",
+      "ip": "192.168.1.10",
+      "subnetMask": "255.255.255.0",
+      "gateway": "192.168.1.1",
+      "dns": [
+        "192.168.1.53"
+      ],
+      "domainName": null,
+      "status": "online",
+      "connectionInterfaces": {},
+      "connections": [
+        "conn_1765551034992_k5lifjroi"
+      ]
+    },
+    {
+      "id": "device-5",
+      "type": "server",
+      "name": "Server 5",
+      "x": 500,
+      "y": 350,
+      "color": "#9b59b6",
+      "ip": "192.168.1.100",
+      "subnetMask": "255.255.255.0",
+      "gateway": "192.168.1.1",
+      "dns": [
+        "192.168.1.53"
+      ],
+      "domainName": "webserver.local",
+      "status": "online",
+      "connectionInterfaces": {},
+      "connections": [
+        "conn_1765551034994_xgjoq0es1"
+      ]
+    },
+    {
+      "id": "device-6",
+      "type": "dns",
+      "name": "DNS Server 6",
+      "x": 300,
+      "y": 550,
+      "color": "#9b59b6",
+      "ip": "192.168.1.53",
+      "subnetMask": "255.255.255.0",
+      "gateway": "192.168.1.1",
+      "dns": [
+        "192.168.1.53"
+      ],
+      "status": "online",
+      "connectionInterfaces": {},
+      "connections": [
+        "conn_1765551034991_irotps9is"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "conn_1765551034991_irotps9is",
+      "device1Id": "device-3",
+      "device2Id": "device-6",
+      "status": "connected"
+    },
+    {
+      "id": "conn_1765551034992_k5lifjroi",
+      "device1Id": "device-3",
+      "device2Id": "device-4",
+      "status": "connected"
+    },
+    {
+      "id": "conn_1765551034994_xgjoq0es1",
+      "device1Id": "device-3",
+      "device2Id": "device-5",
+      "status": "connected"
+    },
+    {
+      "id": "conn_1765551055064_s5z2odbf2",
+      "device1Id": "device-2",
+      "device2Id": "device-7",
+      "status": "connected"
+    },
+    {
+      "id": "conn_1765551270047_sbh9m0zia",
+      "device1Id": "device-2",
+      "device2Id": "device-1",
+      "status": "connected"
+    },
+    {
+      "id": "conn_1765551327188_pwveinupf",
+      "device1Id": "device-2",
+      "device2Id": "device-3",
+      "status": "connected"
+    }
+  ],
+  "dnsRecords": {
+    "google.com": "8.8.8.8",
+    "facebook.com": "31.13.71.36",
+    "github.com": "140.82.121.4",
+    "example.com": "93.184.216.34",
+    "cloud.example.com": "203.0.113.1",
+    "fileserver.local": "192.168.1.100",
+    "webserver.local": "192.168.1.100",
+    "myserver.local": "192.168.1.100",
+    "router.local": "192.168.1.1",
+    "dns.local": "192.168.1.53",
+    "printer.local": "192.168.1.50",
+    "nas.local": "192.168.1.200",
+    "camera.local": "192.168.1.55"
+  }
+}

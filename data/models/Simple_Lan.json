@@ -1,0 +1,158 @@
+{
+  "metadata": {
+    "name": "Simple_Lan",
+    "exportDate": "2025-12-12T18:18:01.798Z",
+    "version": "2.0",
+    "app": "Network Simulator",
+    "deviceCount": 5,
+    "connectionCount": 5
+  },
+  "devices": [
+    {
+      "id": "device-2",
+      "type": "switch",
+      "name": "Switch 2",
+      "x": 297.91668701171875,
+      "y": 220.91668701171875,
+      "color": "#2ecc71",
+      "ip": "N/A",
+      "subnetMask": "255.255.255.0",
+      "gateway": "0.0.0.0",
+      "dns": [],
+      "status": "online",
+      "connectionInterfaces": {},
+      "connections": [
+        "conn_1765547232213_jybx4vl3e",
+        "conn_1765547232217_2114smobu",
+        "conn_1765547232218_yswhisz9p",
+        "conn_1765547232219_mrgujkdp4",
+        "conn_1765563390048_vgif0hsze"
+      ]
+    },
+    {
+      "id": "device-3",
+      "type": "computer",
+      "name": "Υπολογιστής 3",
+      "x": 85.33331298828125,
+      "y": 224.33331298828125,
+      "color": "#e74c3c",
+      "ip": "192.168.1.10",
+      "subnetMask": "255.255.255.0",
+      "gateway": "192.168.1.1",
+      "dns": [
+        "192.168.1.53"
+      ],
+      "domainName": null,
+      "status": "online",
+      "connectionInterfaces": {},
+      "connections": [
+        "conn_1765547232218_yswhisz9p"
+      ]
+    },
+    {
+      "id": "device-4",
+      "type": "server",
+      "name": "Server 4",
+      "x": 491.58331298828125,
+      "y": 221.58331298828125,
+      "color": "#9b59b6",
+      "ip": "192.168.1.100",
+      "subnetMask": "255.255.255.0",
+      "gateway": "192.168.1.1",
+      "dns": [
+        "192.168.1.53"
+      ],
+      "domainName": "myserver.local",
+      "status": "online",
+      "connectionInterfaces": {},
+      "connections": [
+        "conn_1765547232219_mrgujkdp4"
+      ]
+    },
+    {
+      "id": "device-5",
+      "type": "dns",
+      "name": "DNS Server 5",
+      "x": 300.5,
+      "y": 426.5,
+      "color": "#9b59b6",
+      "ip": "192.168.1.53",
+      "subnetMask": "255.255.255.0",
+      "gateway": "192.168.1.1",
+      "dns": [
+        "192.168.1.53"
+      ],
+      "status": "online",
+      "connectionInterfaces": {},
+      "connections": [
+        "conn_1765547232217_2114smobu"
+      ]
+    },
+    {
+      "id": "device-7",
+      "type": "printer",
+      "name": "Εκτυπωτής 7",
+      "x": 293.51666259765625,
+      "y": 38.5333251953125,
+      "color": "#34495e",
+      "ip": "192.168.1.150",
+      "subnetMask": "255.255.255.0",
+      "gateway": "0.0.0.0",
+      "dns": [
+        "192.168.1.53"
+      ],
+      "domainName": null,
+      "status": "online",
+      "connectionInterfaces": {},
+      "connections": [
+        "conn_1765563390048_vgif0hsze"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "conn_1765547232213_jybx4vl3e",
+      "device1Id": "device-1",
+      "device2Id": "device-2",
+      "status": "connected"
+    },
+    {
+      "id": "conn_1765547232217_2114smobu",
+      "device1Id": "device-2",
+      "device2Id": "device-5",
+      "status": "connected"
+    },
+    {
+      "id": "conn_1765547232218_yswhisz9p",
+      "device1Id": "device-2",
+      "device2Id": "device-3",
+      "status": "connected"
+    },
+    {
+      "id": "conn_1765547232219_mrgujkdp4",
+      "device1Id": "device-2",
+      "device2Id": "device-4",
+      "status": "connected"
+    },
+    {
+      "id": "conn_1765563390048_vgif0hsze",
+      "device1Id": "device-2",
+      "device2Id": "device-7"
+    }
+  ],
+  "dnsRecords": {
+    "google.com": "8.8.8.8",
+    "facebook.com": "31.13.71.36",
+    "github.com": "140.82.121.4",
+    "example.com": "93.184.216.34",
+    "cloud.example.com": "8.8.8.8",
+    "fileserver.local": "192.168.1.100",
+    "webserver.local": "192.168.1.100",
+    "myserver.local": "192.168.1.100",
+    "router.local": "192.168.1.1",
+    "dns.local": "192.168.1.53",
+    "printer.local": "192.168.1.50",
+    "nas.local": "192.168.1.200",
+    "camera.local": "192.168.1.55"
+  }
+}

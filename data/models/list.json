@@ -1,0 +1,32 @@
+[
+    {
+        "name": "Απλό LAN",
+        "file": "simple-lan.json",
+        "description": "Βασικό τοπικό δίκτυο για εκμάθηση",
+        "devices": 4,
+        "connections": 3,
+        "type": "lan",
+        "author": "CITEd.gr",
+        "version": "1.0"
+    },
+    {
+        "name": "WAN Δίκτυο",
+        "file": "wan-network.json",
+        "description": "Δίκτυο ευρείας περιοχής με πολλαπλά routers",
+        "devices": 6,
+        "connections": 7,
+        "type": "wan",
+        "author": "CITEd.gr",
+        "version": "1.0"
+    },
+    {
+        "name": "Εργαστήριο DNS",
+        "file": "dns-lab.json",
+        "description": "Εκπαιδευτικό εργαστήριο για DNS queries",
+        "devices": 5,
+        "connections": 5,
+        "type": "dns",
+        "author": "CITEd.gr", 
+        "version": "1.1"
+    }
+]

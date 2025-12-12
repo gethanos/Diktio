@@ -1,0 +1,96 @@
+{
+    "metadata": {
+        "name": "Απλό WAN Δίκτυο",
+        "exportDate": "2024-01-15T12:00:00.000Z",
+        "version": "2.0",
+        "app": "Network Simulator",
+        "deviceCount": 4,
+        "connectionCount": 3
+    },
+    "devices": [
+        {
+            "id": "simple-cloud-1",
+            "type": "cloud",
+            "name": "Internet",
+            "x": 400,
+            "y": 200,
+            "color": "#f39c12",
+            "ip": "203.0.113.254",
+            "subnetMask": "255.255.255.0",
+            "status": "online",
+            "connections": ["simple-conn-1"]
+        },
+        {
+            "id": "simple-router-1",
+            "type": "router",
+            "name": "Router",
+            "x": 200,
+            "y": 200,
+            "color": "#3498db",
+            "ip": "192.168.1.1",
+            "subnetMask": "255.255.255.0",
+            "gateway": "203.0.113.254",
+            "dns": ["8.8.8.8"],
+            "status": "online",
+            "interfaces": {
+                "wan": { "ip": "203.0.113.10", "subnetMask": "255.255.255.0", "gateway": "203.0.113.254", "dns": ["8.8.8.8"] },
+                "lan": { "ip": "192.168.1.1", "subnetMask": "255.255.255.0", "gateway": "0.0.0.0", "dns": ["8.8.8.8"] }
+            },
+            "connections": ["simple-conn-1", "simple-conn-2"]
+        },
+        {
+            "id": "simple-switch-1",
+            "type": "switch",
+            "name": "Κεντρικός Switch",
+            "x": 200,
+            "y": 350,
+            "color": "#2ecc71",
+            "ip": "N/A",
+            "subnetMask": "255.255.255.0",
+            "gateway": "0.0.0.0",
+            "status": "online",
+            "connections": ["simple-conn-2", "simple-conn-3"]
+        },
+        {
+            "id": "simple-pc-1",
+            "type": "computer",
+            "name": "Υπολογιστής",
+            "x": 200,
+            "y": 500,
+            "color": "#e74c3c",
+            "ip": "192.168.1.10",
+            "subnetMask": "255.255.255.0",
+            "gateway": "192.168.1.1",
+            "dns": ["8.8.8.8"],
+            "status": "online",
+            "connections": ["simple-conn-3"]
+        }
+    ],
+    "connections": [
+        {
+            "id": "simple-conn-1",
+            "device1Id": "simple-cloud-1",
+            "device2Id": "simple-router-1",
+            "port1": "port1",
+            "port2": "wan",
+            "status": "connected"
+        },
+        {
+            "id": "simple-conn-2",
+            "device1Id": "simple-router-1",
+            "device2Id": "simple-switch-1",
+            "port1": "lan",
+            "port2": "port1",
+            "status": "connected"
+        },
+        {
+            "id": "simple-conn-3",
+            "device1Id": "simple-switch-1",
+            "device2Id": "simple-pc-1",
+            "port1": "port2",
+            "port2": "eth0",
+            "status": "connected"
+        }
+    ],
+    "dnsRecords": {}
+}
