@@ -1,9 +1,9 @@
-# Network Simulation Tool - CITEd.gr VLE
+# `Diktio` Network Simulation Tool - CITEd.gr VLE
 
 Ένα διαδραστικό εργαλείο προσομοίωσης δικτύων για εκπαιδευτικούς σκοπούς
 
 ## Ζωντανή Επίδειξη
-Δείτε το ζωντανά εδώ: https://vle.cited.gr/apps/netsim
+Δείτε το ζωντανά εδώ: https://vle.cited.gr/apps/diktio
 
 ## Σύνοψη
 **Για χρήση σε μεγάλη οθόνη** / Υπολογιστή ή ταμπλέτα
@@ -22,8 +22,8 @@
 - Πλήρης υποστήριξη Ελληνικής γλώσσας
 
 ## Γρήγορη Εκκίνηση
-1. Clone repository: `git clone https://github.com/gethanos/NetSim.git`
-2. Άνοιγμα: `cd NetSim`
+1. Clone repository: `git clone https://github.com/gethanos/Diktio.git`
+2. Άνοιγμα: `cd Diktio`
 3. Ανοίξτε το `index.html` στον browser
 
 ## Τύποι Συσκευών
@@ -46,6 +46,10 @@
 Το vle.CITEd.gr είναι ένα εικονικό περιβάλλον μάθησης που αναπτύχθηκε για να υποστηρίξει την εκπαίδευση στην Ελλάδα. Πέρα από τα μαθήματα, προσφέρει ένα σύνολο από διαδραστικά εργαλεία και εφαρμογές για την ενίσχυση της διδακτικής διαδικασίας.
 
 ## Σύνδεσμοι
-- Ζωντανή Επίδειξη: https://vle.cited.gr/apps/netsim
+- Ζωντανή Επίδειξη: https://vle.cited.gr/apps/diktio
 - CITEd.gr VLE: https://vle.cited.gr
 - CITEd.gr Website: https://cited.gr
+
+> ⚠️ This project was formerly known as **netsim** by Georgalas.
+> The repository was renamed to **diktio** for clarity and scope alignment.
+
