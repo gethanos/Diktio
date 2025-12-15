@@ -259,59 +259,110 @@ class DeviceManager {
     }
     
     // Καθιστά τη συσκευή μετακινήσιμη
-    makeDeviceDraggable(deviceEl, device) {
-        let isDragging = false;
-        let offsetX, offsetY;
-        
-        deviceEl.addEventListener('mousedown', (e) => {
-            if (e.button !== 0) return;
-            isDragging = true;
-            
-            const rect = deviceEl.getBoundingClientRect();
-            offsetX = e.clientX - rect.left;
-            offsetY = e.clientY - rect.top;
-            
-            deviceEl.style.cursor = 'grabbing';
-            deviceEl.style.zIndex = '100';
-            
-            document.addEventListener('mousemove', drag);
-            document.addEventListener('mouseup', stopDrag);
-            e.preventDefault();
-        });
-        
-        const drag = (e) => {
-            if (!isDragging) return;
-            
+// Καθιστά τη συσκευή μετακινήσιμη
+makeDeviceDraggable(deviceEl, device) {
+    let isDragging = false;
+    let offsetX, offsetY;
+    let touchStartX, touchStartY;
+    let touchMoved = false;
+
+    // Mouse events (unchanged)
+    deviceEl.addEventListener('mousedown', (e) => {
+        if (e.button !== 0) return;
+        isDragging = true;
+        const rect = deviceEl.getBoundingClientRect();
+        offsetX = e.clientX - rect.left;
+        offsetY = e.clientY - rect.top;
+        deviceEl.style.cursor = 'grabbing';
+        deviceEl.style.zIndex = '100';
+        document.addEventListener('mousemove', drag);
+        document.addEventListener('mouseup', stopDrag);
+        e.preventDefault();
+    });
+
+    const drag = (e) => {
+        if (!isDragging) return;
+        const workspaceRect = document.getElementById('workspace').getBoundingClientRect();
+        let newX = e.clientX - workspaceRect.left - offsetX;
+        let newY = e.clientY - workspaceRect.top - offsetY;
+        const maxX = workspaceRect.width - 120;
+        const maxY = workspaceRect.height - 120;
+        device.x = Math.max(0, Math.min(newX, maxX));
+        device.y = Math.max(0, Math.min(newY, maxY));
+        deviceEl.style.left = `${device.x}px`;
+        deviceEl.style.top = `${device.y}px`;
+        if (typeof window.updateConnections === 'function') {
+            window.updateConnections();
+        }
+    };
+
+    const stopDrag = () => {
+        if (isDragging) {
+            isDragging = false;
+            deviceEl.style.cursor = 'pointer';
+            deviceEl.style.zIndex = '10';
+            document.removeEventListener('mousemove', drag);
+            document.removeEventListener('mouseup', stopDrag);
+        }
+    };
+
+    // Touch events with tap/drag distinction
+    deviceEl.addEventListener('touchstart', (e) => {
+        if (e.touches.length !== 1) return;
+        isDragging = true;
+        touchMoved = false;
+        const touch = e.touches[0];
+        touchStartX = touch.clientX;
+        touchStartY = touch.clientY;
+        const rect = deviceEl.getBoundingClientRect();
+        offsetX = touch.clientX - rect.left;
+        offsetY = touch.clientY - rect.top;
+        deviceEl.style.cursor = 'grabbing';
+        deviceEl.style.zIndex = '100';
+        document.addEventListener('touchmove', dragTouch, { passive: false });
+        document.addEventListener('touchend', stopDragTouch, { passive: false });
+        e.preventDefault();
+    }, { passive: false });
+
+    const dragTouch = (e) => {
+        if (!isDragging) return;
+        const touch = e.touches[0];
+        // If moved more than 10px, treat as drag
+        if (Math.abs(touch.clientX - touchStartX) > 10 || Math.abs(touch.clientY - touchStartY) > 10) {
+            touchMoved = true;
+        }
+        if (touchMoved) {
             const workspaceRect = document.getElementById('workspace').getBoundingClientRect();
-            let newX = e.clientX - workspaceRect.left - offsetX;
-            let newY = e.clientY - workspaceRect.top - offsetY;
-            
+            let newX = touch.clientX - workspaceRect.left - offsetX;
+            let newY = touch.clientY - workspaceRect.top - offsetY;
             const maxX = workspaceRect.width - 120;
             const maxY = workspaceRect.height - 120;
-            
             device.x = Math.max(0, Math.min(newX, maxX));
             device.y = Math.max(0, Math.min(newY, maxY));
-            
             deviceEl.style.left = `${device.x}px`;
             deviceEl.style.top = `${device.y}px`;
-            
-            // Ενημέρωση συνδέσεων
             if (typeof window.updateConnections === 'function') {
                 window.updateConnections();
             }
-        };
-        
-        const stopDrag = () => {
-            if (isDragging) {
-                isDragging = false;
-                deviceEl.style.cursor = 'pointer';
-                deviceEl.style.zIndex = '10';
-                
-                document.removeEventListener('mousemove', drag);
-                document.removeEventListener('mouseup', stopDrag);
+        }
+        e.preventDefault();
+    };
+
+    const stopDragTouch = (e) => {
+        if (isDragging) {
+            isDragging = false;
+            deviceEl.style.cursor = 'pointer';
+            deviceEl.style.zIndex = '10';
+            document.removeEventListener('touchmove', dragTouch, { passive: false });
+            document.removeEventListener('touchend', stopDragTouch, { passive: false });
+            // If it was a tap (not a drag), trigger click manually
+            if (!touchMoved) {
+                deviceEl.click();
             }
-        };
-    }
+        }
+        if (e) e.preventDefault();
+    };
+}
     
     // Επιλογή συσκευής
     selectDevice(device) {
@@ -846,3 +897,4 @@ updateDeviceConfigFromUI(device) {
 
 // Εξαγωγή της κλάσης
 export default DeviceManager;
+
