@@ -758,6 +758,50 @@ createRouterToDeviceConnection(router, otherDevice) {
     let optionsText = `Σύνδεση ${router.name} (Router) ↔ ${otherDevice.name} (${otherDevice.type}):\n\n`;
     optionsText += `Επιλογή interface για τον router ${router.name}:\n\n`;
     
+    // Ειδική περίπτωση για switch χωρίς IP
+    if (otherDevice.type === 'switch' && (!otherDevice.ip || otherDevice.ip === 'N/A')) {
+        optionsText += "ΣΗΜΕΙΩΣΗ: Το switch δεν έχει IP - θα συνδεθεί μόνο στο LAN ή LAN2\n\n";
+        
+        // Φιλτράρουμε μόνο LAN και LAN2 για switches χωρίς IP
+        const availableInterfaces = freeInterfaces.filter(iface => iface === 'lan' || iface === 'lan2');
+        if (availableInterfaces.length === 0) {
+            alert(`Ο router ${router.name} δεν έχει διαθέσιμο LAN ή LAN2 για switch χωρίς IP!`);
+            return null;
+        }
+        
+        availableInterfaces.forEach((iface, index) => {
+            let info = '';
+            switch(iface) {
+                case 'lan':
+                    info = `LAN (${router.interfaces.lan.ip}/24)`;
+                    break;
+                case 'lan2':
+                    info = `LAN2 (${router.interfaces.lan2.ip}/24)`;
+                    break;
+            }
+            optionsText += `${index + 1}. ${iface.toUpperCase()} - ${info}\n`;
+        });
+        
+        optionsText += `\nΕισάγετε αριθμό (1-${availableInterfaces.length}):`;
+        
+        const interfaceChoice = prompt(optionsText, "1");
+        const choiceIndex = parseInt(interfaceChoice) - 1;
+        
+        let selectedInterface = null;
+        
+        if (choiceIndex >= 0 && choiceIndex < availableInterfaces.length) {
+            selectedInterface = availableInterfaces[choiceIndex];
+        } else {
+            selectedInterface = availableInterfaces[0] || 'lan';
+        }
+        
+        console.log(`[ROUTER-DEVICE] Θα δημιουργηθεί σύνδεση με interface: ${selectedInterface}`);
+        
+        // Δημιουργία της σύνδεσης
+        return this.createRouterToDeviceConnectionWithInterface(router, otherDevice, selectedInterface);
+    }
+    
+    // Κανονική περίπτωση (όχι switch χωρίς IP)
     freeInterfaces.forEach((iface, index) => {
         let info = '';
         switch(iface) {
@@ -822,6 +866,13 @@ createRouterToDeviceConnectionWithInterface(router, otherDevice, interfaceType) 
         }
         
         console.log(`[ROUTER-DEVICE] Δημιουργήθηκε: ${router.name} (${interfaceType}) ↔ ${otherDevice.name}`);
+        
+        // ΑΠΛΗ ΔΙΟΡΘΩΣΗ: Αποθήκευση interface ΓΙΑ SWITCH ΧΩΡΙΣ IP
+        if (otherDevice.type === 'switch' && (!otherDevice.ip || otherDevice.ip === 'N/A')) {
+            console.log(`[SWITCH NO IP] Αποθήκευση interface: ${interfaceType} για switch ${otherDevice.name}`);
+            // Απλή αποθήκευση στο switch
+            otherDevice.connectedToInterface = interfaceType;
+        }
         
         // Ειδική περίπτωση: Cloud στο WAN
         if (interfaceType === 'wan' && otherDevice.type === 'cloud') {
@@ -1092,16 +1143,6 @@ removeConnection(connection) {
     }
     
     console.log(`[CONNECTION] Σύνδεση διαγράφηκε επιτυχώς: ${connection.id}`);
-    
-    // 5. Debug: Δείξε πόσα connectionInterfaces έχουν μείνει
-    if (device1 && device1.type === 'router') {
-        console.log(`[DEBUG] ${device1.name} connectionInterfaces μετά:`, 
-                   device1.connectionInterfaces ? Object.keys(device1.connectionInterfaces) : 'none');
-    }
-    if (device2 && device2.type === 'router') {
-        console.log(`[DEBUG] ${device2.name} connectionInterfaces μετά:`, 
-                   device2.connectionInterfaces ? Object.keys(device2.connectionInterfaces) : 'none');
-    }
     
     return connection;
 }
@@ -1676,6 +1717,95 @@ removeConnection(connection) {
         return { canCommunicate: false, viaGateway: false, path: null };
     }
     
+    // ==================== ΒΟΗΘΗΤΙΚΗ ΜΕΘΟΔΟΣ: ΕΥΡΕΣΗ INTERFACE ΓΙΑ ΣΥΣΚΕΥΗ ====================
+    
+    determineCorrectRouterInterface(router, connectedDevice) {
+        console.log(`[INTERFACE DETECT] Έλεγχος interface για: ${router.name}, Συνδεδεμένο: ${connectedDevice.name}`);
+        
+        // 1. Βρες τη σύνδεση μεταξύ τους
+        const connection = this.connections.find(conn => 
+            (conn.device1Id === router.id && conn.device2Id === connectedDevice.id) ||
+            (conn.device1Id === connectedDevice.id && conn.device2Id === router.id)
+        );
+        
+        if (connection) {
+            // 2. Έλεγχος αν το interface είναι ήδη αποθηκευμένο στη σύνδεση
+            if (connection.interface1 && connection.device1Id === router.id) {
+                console.log(`[INTERFACE DETECT] Βρέθηκε ήδη στη σύνδεση: ${connection.interface1}`);
+                return connection.interface1;
+            }
+            if (connection.interface2 && connection.device2Id === router.id) {
+                console.log(`[INTERFACE DETECT] Βρέθηκε ήδη στη σύνδεση: ${connection.interface2}`);
+                return connection.interface2;
+            }
+            
+            // 3. Έλεγχος στο router.connectionInterfaces
+            if (router.connectionInterfaces && router.connectionInterfaces[connection.id]) {
+                const storedInterface = router.connectionInterfaces[connection.id];
+                console.log(`[INTERFACE DETECT] Βρέθηκε στο connectionInterfaces: ${storedInterface}`);
+                return storedInterface;
+            }
+        }
+        
+        // 4. ΕΙΔΙΚΗ ΠΕΡΙΠΤΩΣΗ: Switch χωρίς IP - χρησιμοποίησε το αποθηκευμένο
+        if (connectedDevice.type === 'switch' && (!connectedDevice.ip || connectedDevice.ip === 'N/A')) {
+            if (connectedDevice.connectedToInterface) {
+                console.log(`[INTERFACE DETECT] Switch χωρίς IP έχει αποθηκευμένο: ${connectedDevice.connectedToInterface}`);
+                return connectedDevice.connectedToInterface;
+            }
+            console.log(`[INTERFACE DETECT] Switch χωρίς IP, προεπιλογή: lan`);
+            return 'lan';
+        }
+        
+        // 5. Έλεγχος για routers
+        if (connectedDevice.type === 'router') {
+            console.log(`[INTERFACE DETECT] Router-to-router σύνδεση`);
+            return this.getInterfaceForRouterConnection(router, connectedDevice);
+        }
+        
+        // 6. Για άλλες συσκευές, ελέγχουμε αν είναι στο ίδιο δίκτυο
+        const routerLanIP = router.interfaces.lan.ip;
+        const routerSubnet = router.interfaces.lan.subnetMask;
+        const otherIP = this.getDeviceIP(connectedDevice);
+        const otherSubnet = this.getDeviceSubnet(connectedDevice);
+        
+        console.log(`[INTERFACE DETECT] Router LAN: ${routerLanIP}/${routerSubnet}, Other: ${otherIP}/${otherSubnet}`);
+        
+        if (routerLanIP && routerLanIP !== 'N/A' && otherIP && otherIP !== 'N/A') {
+            if (areInSameNetwork(routerLanIP, otherIP, routerSubnet, otherSubnet)) {
+                console.log(`[INTERFACE DETECT] Είναι στο ίδιο δίκτυο -> LAN interface`);
+                return 'lan';
+            }
+        }
+        
+        // 7. Έλεγχος για WAN
+        const routerWanIP = router.interfaces.wan.ip;
+        const routerWanSubnet = router.interfaces.wan.subnetMask;
+        
+        if (routerWanIP && routerWanIP !== 'N/A' && otherIP && otherIP !== 'N/A') {
+            if (areInSameNetwork(routerWanIP, otherIP, routerWanSubnet, otherSubnet)) {
+                console.log(`[INTERFACE DETECT] Είναι στο ίδιο δίκτυο WAN -> WAN interface`);
+                return 'wan';
+            }
+        }
+        
+        // 8. Ελέγχουμε για LAN2
+        if (router.interfaces.lan2 && router.interfaces.lan2.enabled) {
+            const routerLan2IP = router.interfaces.lan2.ip;
+            const routerLan2Subnet = router.interfaces.lan2.subnetMask;
+            
+            if (routerLan2IP && routerLan2IP !== 'N/A' && otherIP && otherIP !== 'N/A') {
+                if (areInSameNetwork(routerLan2IP, otherIP, routerLan2Subnet, otherSubnet)) {
+                    console.log(`[INTERFACE DETECT] Είναι στο ίδιο δίκτυο LAN2 -> LAN2 interface`);
+                    return 'lan2';
+                }
+            }
+        }
+        
+        console.log(`[INTERFACE DETECT] Δεν μπορούσαμε να προσδιορίσουμε, default: lan`);
+        return 'lan'; // default
+    }
+    
     removeDevice(device) {
         const connectionsToRemove = [...device.connections];
         connectionsToRemove.forEach(connId => {
@@ -1908,15 +2038,6 @@ removeConnection(connection) {
             }, 100);
         }
     }
-    
-    // ΑΦΑΙΡΩ ΤΙΣ ΠΕΡΙΣΣΕΣ ΜΕΘΟΔΟΥΣ ΠΟΥ ΚΑΝΟΥΝ "ΈΞΥΠΝΗ" ΛΟΓΙΚΗ
-    
-    // ΔΕΝ ΧΡΕΙΑΖΕΤΑΙ Η isInterfaceComboValid - ΑΦΗΝΟΥΜΕ ΤΟΝ ΧΡΗΣΤΗ ΝΑ ΑΠΟΦΑΣΙΣΕΙ
-    
-    // ΔΕΝ ΧΡΕΙΑΖΕΤΑΙ Η createRouterToRouterConnectionWithLAN2Support - ΧΡΗΣΙΜΟΠΟΙΕΙΤΑΙ Η ΚΥΡΙΑ
-    
-    // ΔΕΝ ΧΡΕΙΑΖΕΤΑΙ Η canRoutersConnect με όλους τους ελέγχους - ΚΑΝΟΥΜΕ ΑΠΛΟ ΕΛΕΓΧΟ
-    
 }
 
 // Εξαγωγή της κλάσης
