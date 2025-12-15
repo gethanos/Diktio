@@ -220,7 +220,8 @@ class DeviceManager {
         }
         
         // ΚΡΙΤΙΚΗ ΑΛΛΑΓΗ: Έλεγχος για διπλότυπη IP στο ίδιο subnet
-        const duplicateIPWarning = this.checkForDuplicateIP(ipAddress, subnetMask, deviceId);
+        // ΔΕΝ περνάμε deviceId γιατί η συσκευή δεν έχει προστεθεί ακόμα στον πίνακα
+        const duplicateIPWarning = this.checkForDuplicateIP(ipAddress, subnetMask, null);
         
         return {
             id: deviceId,
@@ -237,17 +238,17 @@ class DeviceManager {
             status: 'online',
             domainName: null,
             dnsCache: {},
-            hasDuplicateIP: duplicateIPWarning.hasDuplicate // Προσθήκη νέου πεδίου
+            hasDuplicateIP: false // Η νέα συσκευή δεν έχει διπλότυπο IP, οι υπάρχουσες έχουν
         };
     }
     
-    // Προσθήκη νέας βοηθητικής συνάρτησης για έλεγχο διπλότυπης IP
+    // Προσθήκη νέας βοηθητικής συνάρτησης για έλεγχο διπλότυπης IP - ΔΙΟΡΘΩΜΕΝΗ
     checkForDuplicateIP(ip, subnetMask, currentDeviceId) {
         if (!ip || ip === 'N/A') return { hasDuplicate: false, message: '' };
         
         const duplicateDevices = this.devices.filter(device => {
-            // Παράλειψη της τρέχουσας συσκευής (αν υπάρχει ήδη)
-            if (device.id === currentDeviceId) return false;
+            // Παράλειψη της τρέχουσας συσκευής ΜΟΝΟ αν υπάρχει ήδη στον πίνακα
+            if (currentDeviceId && device.id === currentDeviceId) return false;
             
             // Παράλειψη συσκευών χωρίς IP
             if (!device.ip || device.ip === 'N/A') return false;
@@ -292,28 +293,28 @@ class DeviceManager {
                 const deviceNames = sameSubnetDevices.map(d => d.name).join(', ');
                 const warningMessage = `ΠΡΟΣΟΧΗ: Η διεύθυνση IP ${ip} υπάρχει ήδη στο ίδιο δίκτυο στις συσκευές: ${deviceNames}`;
                 
-                // Προσθήκη κίτρινου border στη συσκευή
-                setTimeout(() => {
-                    const currentDevice = this.getDeviceById(currentDeviceId);
-                    if (currentDevice && currentDevice.element) {
-                        currentDevice.element.style.border = '3px solid #ffcc00';
-                        currentDevice.element.style.boxShadow = '0 0 10px #ffcc00';
+                // Εφαρμογή προειδοποίησης στις υπάρχουσες συσκευές με διπλότυπο IP
+                sameSubnetDevices.forEach(duplicateDevice => {
+                    duplicateDevice.hasDuplicateIP = true;
+                    if (duplicateDevice.element) {
+                        duplicateDevice.element.style.border = '3px solid #ffcc00';
+                        duplicateDevice.element.style.boxShadow = '0 0 10px #ffcc00';
+                        duplicateDevice.element.classList.add('duplicate-ip-warning');
                         
-                        // Προσθήκη ειδικού class για εμφάνιση προειδοποίησης
-                        currentDevice.element.classList.add('duplicate-ip-warning');
-                        
-                        // Προσθήκη εικονιδίου προειδοποίησης
-                        const warningIcon = document.createElement('div');
-                        warningIcon.className = 'duplicate-ip-icon';
-                        warningIcon.innerHTML = '⚠️';
-                        warningIcon.style.position = 'absolute';
-                        warningIcon.style.top = '-10px';
-                        warningIcon.style.right = '-10px';
-                        warningIcon.style.fontSize = '20px';
-                        warningIcon.style.zIndex = '100';
-                        currentDevice.element.appendChild(warningIcon);
+                        // Προσθήκη εικονιδίου προειδοποίησης αν δεν υπάρχει ήδη
+                        if (!duplicateDevice.element.querySelector('.duplicate-ip-icon')) {
+                            const warningIcon = document.createElement('div');
+                            warningIcon.className = 'duplicate-ip-icon';
+                            warningIcon.innerHTML = '⚠️';
+                            warningIcon.style.position = 'absolute';
+                            warningIcon.style.top = '-10px';
+                            warningIcon.style.right = '-10px';
+                            warningIcon.style.fontSize = '20px';
+                            warningIcon.style.zIndex = '100';
+                            duplicateDevice.element.appendChild(warningIcon);
+                        }
                     }
-                }, 100);
+                });
                 
                 // Προσθήκη μηνύματος στο console/log
                 if (typeof window.addLog === 'function') {
@@ -360,7 +361,6 @@ class DeviceManager {
     }
     
     // Καθιστά τη συσκευή μετακινήσιμη
-// Καθιστά τη συσκευή μετακινήσιμη
 makeDeviceDraggable(deviceEl, device) {
     let isDragging = false;
     let offsetX, offsetY;
@@ -656,7 +656,7 @@ makeDeviceDraggable(deviceEl, device) {
         
         // Έλεγχος για διπλότυπη IP στα interfaces
         const checkDuplicateIP = (newIP, subnet, interfaceType) => {
-            if (newIP && newIP !== 'N/A') {
+            if (newIP && newIP !== 'N/A' && newIP !== '0.0.0.0') {
                 const duplicateCheck = this.checkForDuplicateIP(newIP, subnet, router.id);
                 if (duplicateCheck.hasDuplicate) {
                     // Προσθήκη προειδοποιήσεων
@@ -845,11 +845,11 @@ updateStandardDeviceConfig(device, configData) {
         // Έλεγχος διπλότυπης IP
         const duplicateCheck = this.checkForDuplicateIP(ip, subnet || device.subnetMask, device.id);
         if (duplicateCheck.hasDuplicate) {
-            device.hasDuplicateIP = true; // Προσθήκη
-            // ΔΕΝ σταματάμε, απλά προειδοποιούμε - αφήνουμε το IP να οριστεί
+            // Η συσκευή ΜΟΝΟ ενημερώνεται - δεν λαμβάνει προειδοποίηση
+            device.hasDuplicateIP = false;
         } else {
-            device.hasDuplicateIP = false; // Προσθήκη
-            // Αφαίρεση προειδοποίησης αν υπάρχει
+            device.hasDuplicateIP = false;
+            // Αφαίρεση προειδοποίησης αν υπάρχει (για αυτή τη συσκευή)
             if (device.element) {
                 device.element.style.border = '';
                 device.element.style.boxShadow = '';
