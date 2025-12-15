@@ -134,7 +134,8 @@ class DeviceManager {
             element: element,
             connections: [],
             status: 'online',
-            isGateway: true
+            isGateway: true,
+            hasDuplicateIP: false // Προσθήκη νέου πεδίου
         };
                 
         return router;
@@ -154,7 +155,8 @@ class DeviceManager {
             y: y,
             element: element,
             connections: [],
-            status: 'online'
+            status: 'online',
+            hasDuplicateIP: false // Προσθήκη νέου πεδίου
         };
     }
     
@@ -172,7 +174,8 @@ class DeviceManager {
             y: y,
             element: element,
             connections: [],
-            status: 'online'
+            status: 'online',
+            hasDuplicateIP: false // Προσθήκη νέου πεδίου
         };
     }
     
@@ -191,7 +194,8 @@ class DeviceManager {
             element: element,
             connections: [],
             status: 'online',
-            dnsRecords: {}
+            dnsRecords: {},
+            hasDuplicateIP: false // Προσθήκη νέου πεδίου
         };
     }
     
@@ -199,6 +203,7 @@ class DeviceManager {
     createStandardDevice(deviceId, type, deviceName, x, y, element) {
         // Δημιουργία τυχαίας IP εντός LAN range
         let ipAddress, gateway = '0.0.0.0', dns = [];
+        const subnetMask = '255.255.255.0';
         
         // Προσπάθεια να βρεθεί router για να πάρουμε το LAN του
         const router = this.devices.find(d => d.type === 'router');
@@ -214,12 +219,15 @@ class DeviceManager {
             dns = ['8.8.8.8'];
         }
         
+        // ΚΡΙΤΙΚΗ ΑΛΛΑΓΗ: Έλεγχος για διπλότυπη IP στο ίδιο subnet
+        const duplicateIPWarning = this.checkForDuplicateIP(ipAddress, subnetMask, deviceId);
+        
         return {
             id: deviceId,
             type: type,
             name: deviceName,
             ip: ipAddress,
-            subnetMask: '255.255.255.0',
+            subnetMask: subnetMask,
             gateway: gateway,
             dns: dns,
             x: x,
@@ -228,8 +236,101 @@ class DeviceManager {
             connections: [],
             status: 'online',
             domainName: null,
-            dnsCache: {}
+            dnsCache: {},
+            hasDuplicateIP: duplicateIPWarning.hasDuplicate // Προσθήκη νέου πεδίου
         };
+    }
+    
+    // Προσθήκη νέας βοηθητικής συνάρτησης για έλεγχο διπλότυπης IP
+    checkForDuplicateIP(ip, subnetMask, currentDeviceId) {
+        if (!ip || ip === 'N/A') return { hasDuplicate: false, message: '' };
+        
+        const duplicateDevices = this.devices.filter(device => {
+            // Παράλειψη της τρέχουσας συσκευής (αν υπάρχει ήδη)
+            if (device.id === currentDeviceId) return false;
+            
+            // Παράλειψη συσκευών χωρίς IP
+            if (!device.ip || device.ip === 'N/A') return false;
+            
+            // Έλεγχος routers (έχουν πολλαπλές διεπαφές)
+            if (device.type === 'router') {
+                const interfaces = device.interfaces;
+                for (const iface in interfaces) {
+                    const ifaceData = interfaces[iface];
+                    if (ifaceData.ip && ifaceData.ip !== 'N/A' && ifaceData.ip === ip) {
+                        return true;
+                    }
+                }
+                return false;
+            }
+            
+            // Έλεγχος για τυπικές συσκευές
+            return device.ip === ip;
+        });
+        
+        if (duplicateDevices.length > 0) {
+            // Έλεγχος αν είναι στο ίδιο subnet
+            const sameSubnetDevices = duplicateDevices.filter(device => {
+                if (device.type === 'router') {
+                    // Για routers, ελέγχουμε όλα τα interfaces
+                    const interfaces = device.interfaces;
+                    for (const iface in interfaces) {
+                        const ifaceData = interfaces[iface];
+                        if (ifaceData.ip && ifaceData.ip === ip && 
+                            ifaceData.subnetMask === subnetMask) {
+                            return true;
+                        }
+                    }
+                    return false;
+                }
+                
+                // Για άλλες συσκευές
+                return device.subnetMask === subnetMask;
+            });
+            
+            if (sameSubnetDevices.length > 0) {
+                const deviceNames = sameSubnetDevices.map(d => d.name).join(', ');
+                const warningMessage = `ΠΡΟΣΟΧΗ: Η διεύθυνση IP ${ip} υπάρχει ήδη στο ίδιο δίκτυο στις συσκευές: ${deviceNames}`;
+                
+                // Προσθήκη κίτρινου border στη συσκευή
+                setTimeout(() => {
+                    const currentDevice = this.getDeviceById(currentDeviceId);
+                    if (currentDevice && currentDevice.element) {
+                        currentDevice.element.style.border = '3px solid #ffcc00';
+                        currentDevice.element.style.boxShadow = '0 0 10px #ffcc00';
+                        
+                        // Προσθήκη ειδικού class για εμφάνιση προειδοποίησης
+                        currentDevice.element.classList.add('duplicate-ip-warning');
+                        
+                        // Προσθήκη εικονιδίου προειδοποίησης
+                        const warningIcon = document.createElement('div');
+                        warningIcon.className = 'duplicate-ip-icon';
+                        warningIcon.innerHTML = '⚠️';
+                        warningIcon.style.position = 'absolute';
+                        warningIcon.style.top = '-10px';
+                        warningIcon.style.right = '-10px';
+                        warningIcon.style.fontSize = '20px';
+                        warningIcon.style.zIndex = '100';
+                        currentDevice.element.appendChild(warningIcon);
+                    }
+                }, 100);
+                
+                // Προσθήκη μηνύματος στο console/log
+                if (typeof window.addLog === 'function') {
+                    window.addLog(warningMessage, 'warning');
+                } else {
+                    console.warn(warningMessage);
+                }
+                
+                return { 
+                    hasDuplicate: true, 
+                    message: warningMessage,
+                    duplicateDevices: sameSubnetDevices 
+                };
+            }
+        }
+        
+        return { hasDuplicate: false, message: '' };
     }
     
     // Προσθήκη event listeners σε συσκευή
@@ -553,6 +654,32 @@ makeDeviceDraggable(deviceEl, device) {
             lan2Ip, lan2Subnet, lan2Gateway, lan2Dns, lan2Enabled 
         } = configData;
         
+        // Έλεγχος για διπλότυπη IP στα interfaces
+        const checkDuplicateIP = (newIP, subnet, interfaceType) => {
+            if (newIP && newIP !== 'N/A') {
+                const duplicateCheck = this.checkForDuplicateIP(newIP, subnet, router.id);
+                if (duplicateCheck.hasDuplicate) {
+                    // Προσθήκη προειδοποιήσεων
+                    if (typeof window.addLog === 'function') {
+                        window.addLog(`Προσοχή: Το ${interfaceType} interface έχει διπλότυπη IP ${newIP}`, 'warning');
+                    }
+                }
+            }
+        };
+        
+        // Έλεγχος για κάθε interface
+        if (wanIp !== undefined && wanIp !== router.interfaces.wan.ip) {
+            checkDuplicateIP(wanIp, wanSubnet || router.interfaces.wan.subnetMask, 'WAN');
+        }
+        
+        if (lanIp !== undefined && lanIp !== router.interfaces.lan.ip) {
+            checkDuplicateIP(lanIp, lanSubnet || router.interfaces.lan.subnetMask, 'LAN');
+        }
+        
+        if (lan2Ip !== undefined && lan2Ip !== router.interfaces.lan2.ip) {
+            checkDuplicateIP(lan2Ip, lan2Subnet || router.interfaces.lan2.subnetMask, 'LAN2');
+        }
+        
         // WAN Interface
         if (wanIp !== undefined) {
             if (wanIp && wanIp !== 'N/A') {
@@ -685,8 +812,7 @@ makeDeviceDraggable(deviceEl, device) {
         return { success: true, router };
     }
     
-    // Ενημέρωση τυπικής συσκευής
-// Ενημέρωση τυπικής συσκευής
+    // Ενημέρωση τυπικής συσκευής - Προσθήκη έλεγχου για διπλότυπη IP
 updateStandardDeviceConfig(device, configData) {
     const { ip, subnet, gateway, dns, domainName } = configData;
     
@@ -697,13 +823,40 @@ updateStandardDeviceConfig(device, configData) {
             device.subnetMask = '255.255.255.0';
             device.gateway = '0.0.0.0';
             device.dns = [];
+            device.hasDuplicateIP = false; // Προσθήκη
             
             if (device.element) {
                 device.element.querySelector('.device-ip').innerHTML = '<span class="no-ip">Χωρίς IP</span>';
                 device.element.querySelector('.device-ip').className = 'device-ip no-ip';
+                // Αφαίρεση προειδοποίησης
+                device.element.style.border = '';
+                device.element.style.boxShadow = '';
+                device.element.classList.remove('duplicate-ip-warning');
+                const warningIcon = device.element.querySelector('.duplicate-ip-icon');
+                if (warningIcon) warningIcon.remove();
             }
             
             return { success: true, device };
+        }
+    }
+    
+    // Έλεγχος για διπλότυπη IP ΜΟΝΟ αν αλλάζει IP
+    if (ip && ip !== 'N/A' && ip !== device.ip) {
+        // Έλεγχος διπλότυπης IP
+        const duplicateCheck = this.checkForDuplicateIP(ip, subnet || device.subnetMask, device.id);
+        if (duplicateCheck.hasDuplicate) {
+            device.hasDuplicateIP = true; // Προσθήκη
+            // ΔΕΝ σταματάμε, απλά προειδοποιούμε - αφήνουμε το IP να οριστεί
+        } else {
+            device.hasDuplicateIP = false; // Προσθήκη
+            // Αφαίρεση προειδοποίησης αν υπάρχει
+            if (device.element) {
+                device.element.style.border = '';
+                device.element.style.boxShadow = '';
+                device.element.classList.remove('duplicate-ip-warning');
+                const warningIcon = device.element.querySelector('.duplicate-ip-icon');
+                if (warningIcon) warningIcon.remove();
+            }
         }
     }
     
@@ -897,4 +1050,3 @@ updateDeviceConfigFromUI(device) {
 
 // Εξαγωγή της κλάσης
 export default DeviceManager;
-
