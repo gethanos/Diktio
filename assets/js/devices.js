@@ -334,6 +334,47 @@ class DeviceManager {
         return { hasDuplicate: false, message: '' };
     }
     
+    // Βοηθητική συνάρτηση για αφαίρεση διπλότυπων IP ειδοποιήσεων
+    cleanupDuplicateIPWarnings() {
+        this.devices.forEach(device => {
+            if (device.hasDuplicateIP && device.element) {
+                // Έλεγχος αν η συσκευή έχει ακόμα διπλότυπο IP
+                let stillHasDuplicate = false;
+                
+                if (device.type === 'router') {
+                    // Έλεγχος όλων των interfaces του router
+                    const interfaces = device.interfaces;
+                    for (const iface in interfaces) {
+                        const ifaceData = interfaces[iface];
+                        if (ifaceData.ip && ifaceData.ip !== 'N/A') {
+                            // Χρήση της ίδιας μεθόδου αλλά χωρίς αναδρομικό έλεγχο για την ίδια συσκευή
+                            const duplicateCheck = this.checkForDuplicateIP(ifaceData.ip, ifaceData.subnetMask, device.id);
+                            if (duplicateCheck.hasDuplicate) {
+                                stillHasDuplicate = true;
+                                break;
+                            }
+                        }
+                    }
+                } else if (device.ip && device.ip !== 'N/A') {
+                    const duplicateCheck = this.checkForDuplicateIP(device.ip, device.subnetMask, device.id);
+                    stillHasDuplicate = duplicateCheck.hasDuplicate;
+                }
+                
+                // Αν δεν έχει πλέον διπλότυπο, αφαίρεση της ειδοποίησης
+                if (!stillHasDuplicate) {
+                    device.hasDuplicateIP = false;
+                    if (device.element) {
+                        device.element.style.border = '';
+                        device.element.style.boxShadow = '';
+                        device.element.classList.remove('duplicate-ip-warning');
+                        const warningIcon = device.element.querySelector('.duplicate-ip-icon');
+                        if (warningIcon) warningIcon.remove();
+                    }
+                }
+            }
+        });
+    }
+    
     // Προσθήκη event listeners σε συσκευή
     addDeviceEventListeners(deviceEl, device) {
         deviceEl.addEventListener('click', (e) => {
@@ -636,6 +677,9 @@ makeDeviceDraggable(deviceEl, device) {
     // Ενημέρωση ρυθμίσεων συσκευής (ενιαία μέθοδος)
     updateDeviceConfig(device, configData) {
         try {
+            // Καθαρισμός προειδοποιήσεων πριν την ενημέρωση
+            this.cleanupDuplicateIPWarnings();
+            
             if (device.type === 'router') {
                 return this.updateRouterConfig(device, configData);
             } else {
@@ -657,7 +701,7 @@ makeDeviceDraggable(deviceEl, device) {
         // Έλεγχος για διπλότυπη IP στα interfaces
         const checkDuplicateIP = (newIP, subnet, interfaceType) => {
             if (newIP && newIP !== 'N/A' && newIP !== '0.0.0.0') {
-                const duplicateCheck = this.checkForDuplicateIP(newIP, subnet, router.id);
+                const duplicateCheck = this.checkForDuplicateIP(newIP, subnet || router.interfaces.wan.subnetMask, router.id);
                 if (duplicateCheck.hasDuplicate) {
                     // Προσθήκη προειδοποιήσεων
                     if (typeof window.addLog === 'function') {
@@ -809,6 +853,9 @@ makeDeviceDraggable(deviceEl, device) {
             `LAN: ${router.interfaces.lan.ip}<br>` +
             `LAN2: ${router.interfaces.lan2.ip}${router.interfaces.lan2.enabled ? '' : ' (ανενεργό)'}`;
         
+        // Καθαρισμός προειδοποιήσεων μετά την ενημέρωση
+        this.cleanupDuplicateIPWarnings();
+        
         return { success: true, router };
     }
     
@@ -905,6 +952,9 @@ updateStandardDeviceConfig(device, configData) {
             window.dnsManager.addDNSRecord(domainName, device.ip);
         }
     }
+    
+    // Καθαρισμός προειδοποιήσεων μετά την ενημέρωση
+    this.cleanupDuplicateIPWarnings();
     
     return { success: true, device };
 }    
