@@ -1911,3 +1911,12 @@ body {
     color: var(--text-muted);
     border: 1px solid var(--border-primary);
 }
+.duplicate-ip-warning {
+    animation: pulse-warning 2s infinite;
+}
+
+@keyframes pulse-warning {
+    0% { box-shadow: 0 0 5px #ffcc00; }
+    50% { box-shadow: 0 0 15px #ffcc00; }
+    100% { box-shadow: 0 0 5px #ffcc00; }
+}
