@@ -147,6 +147,29 @@ class UIManager {
             });
             console.log('[UI] Workspace click listener added');
         }
+        // In initializeEventListeners() method, add this:
+if (this.buttons.testDNS) {
+    console.log('[UI FIX] Adding direct DNS button listener');
+    
+    // Create new button to remove old listeners
+    const newButton = this.buttons.testDNS.cloneNode(true);
+    this.buttons.testDNS.parentNode.replaceChild(newButton, this.buttons.testDNS);
+    this.buttons.testDNS = newButton;
+    
+    // Simple direct click handler
+    this.buttons.testDNS.onclick = (e) => {
+        console.log('[DNS] Button clicked - simple handler');
+        e.preventDefault();
+        e.stopPropagation();
+        
+        // Call the working function
+        if (typeof window.simulator !== 'undefined' && window.simulator.testAutoDNS) {
+            window.simulator.testAutoDNS();
+        } else {
+            alert('Simulator not ready yet');
+        }
+    };
+}
         
         // Keyboard shortcuts
         this.setupKeyboardShortcuts();
@@ -179,7 +202,8 @@ class UIManager {
     }
 }, name: 'testPing' },
             { button: this.buttons.testRoute, handler: () => this.toggleTestMode(), name: 'testRoute' },
-            { button: this.buttons.testDNS, handler: () => this.testAutoDNS(), name: 'testDNS' },
+{ button: this.buttons.testDNS, handler: () => window.simulator?.testAutoDNS?.() || this.testAutoDNS(), name: 'testDNS' },
+          //  { button: this.buttons.manualDNS, handler: () => this.toggleManualDNSMode(), name: 'manualDNS' },
             { button: this.buttons.manualDNS, handler: () => this.toggleManualDNSMode(), name: 'manualDNS' },
             { button: this.buttons.addLan, handler: () => this.createPredefinedLan(), name: 'addLan' },
             { button: this.buttons.addWan, handler: () => this.createPredefinedWan(), name: 'addWan' },
@@ -1010,11 +1034,14 @@ if (!safeAddListener('removeDeviceBtn', 'click', () => {
                 this.testRouteFromDevice(device);
                 break;
             case 'quickDNSBtn':
-                this.testAutoDNSFromDevice(device);
+                this.testAutoDNS(device);
                 break;
             case 'quickManualDNSBtn':
-                this.testManualDNSFromDevice(device);
-                break;
+                this.toggleManualDNSMode();
+                if (this.manualDNSMode) {
+                    this.handleManualDNSModeClick(device);
+                }
+            break;        
         }
     }
     
@@ -1257,8 +1284,7 @@ handleTestModeClick(device) {
                 );
                 
                 if (domain && domain.trim() !== '') {
-                    const resolvedIP = this.testDNSQuery(sourceDevice, dnsServerDevice, domain.trim());
-                    
+                        const resolvedIP = window.simulator.testDNSQuery(sourceDevice, dnsServerDevice, domain.trim());                    
                     if (resolvedIP && resolvedIP.ip) {
                         setTimeout(() => {
                             const targetDevice = this.deviceManager.getDeviceByIP(resolvedIP.ip);
@@ -1272,6 +1298,12 @@ handleTestModeClick(device) {
             }, 50);
         }
     }
+    testManualDNSFromDevice(device) {
+    this.toggleManualDNSMode();
+    if (this.manualDNSMode) {
+        this.handleManualDNSModeClick(device);
+    }
+}
     
     // Ενημέρωση κειμένου κατάστασης
     setModeText(text) {
@@ -1549,19 +1581,17 @@ handleTestModeClick(device) {
         }
     }
     
-testAutoDNSFromDevice(device) {
-    if (typeof window.simulator !== 'undefined') {
-        // delegate to SimulationManager, pass managers/ui
-        window.simulator.simulationManager.testAutoDNSFromDevice(
-            device,
-            window.deviceManager,
-            window.dnsManager,
-            window.uiManager
-        );
+testAutoDNS() {
+    console.log('[UI] testAutoDNS called');
+    
+    // Direct call to simulator
+    if (window.simulator && window.simulator.testAutoDNS) {
+        window.simulator.testAutoDNS();
     } else {
-        this.addLog('System not ready', 'warning');
+        console.error('Simulator not found or testAutoDNS method missing');
+        alert('System not ready. Please reload the page.');
     }
-}    
+}
     // CRUD operations
     updateRouterConfig(router) {
         // Παίρνουμε όλες τις τιμές από τα πεδία
@@ -1864,6 +1894,13 @@ removeConnectionById(connId) {
             this.addLog('Το σύστημα δεν είναι έτοιμο ακόμα.', 'warning');
         }
     }
+    testAutoDNSFromDevice(device) {
+    if (typeof window.simulator !== 'undefined') {
+        window.simulator.testAutoDNSFromDevice(device);
+    } else {
+        this.addLog('Το σύστημα δεν είναι έτοιμο ακόμα.', 'warning');
+    }
+}
 }
 
 // Εξαγωγή της κλάσης
