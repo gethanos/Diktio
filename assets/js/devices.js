@@ -99,7 +99,7 @@ class DeviceManager {
         return device;
     }
     
-    // Δημιουργία Router συσκευής - ΣΥΜΒΑΤΗ ΜΕ ΚΑΙ ΤΑ ΔΥΟ (lan ΚΑΙ lan1/lan2)
+    // Δημιουργία Router συσκευής - ΣΥΜΒΑΤΗ ΜΕ ΚΑΙ ΤΑ ΔΥΟ (lan ΚΑΙ lan/lan2)
     createRouterDevice(deviceId, type, deviceName, x, y, element) {
         const router = {
             id: deviceId,
@@ -577,24 +577,33 @@ makeDeviceDraggable(deviceEl, device) {
     }
     
     // Βρείτε συσκευή με βάση το IP - ΕΠΕΚΤΑΣΗ ΓΙΑ 2 LAN
-    getDeviceByIP(ip) {
-        if (!ip || ip === 'N/A' || ip === '0.0.0.0') return null;
-        
-        // Έλεγχος για routers πρώτα (έχουν πολλαπλές διεπαφές)
-        for (const device of this.devices) {
-            if (device.type === 'router') {
-                // Ελέγχουμε όλα τα interfaces
-                if (device.interfaces.wan.ip === ip) return device;
-                if (device.interfaces.lan.ip === ip) return device;
-                if (device.interfaces.lan1 && device.interfaces.lan1.ip === ip) return device;
-                if (device.interfaces.lan2 && device.interfaces.lan2.ip === ip) return device;
-            } else if (device.ip === ip) {
+getDeviceByIP(ip) {
+    if (!ip || ip === 'N/A' || ip === '0.0.0.0') return null;
+    
+    for (const device of this.devices) {
+        if (device.type === 'router') {
+            if (device.interfaces.wan && device.interfaces.wan.ip === ip) {
+                device.ip = ip; // Απλά βάλε το IP στο object
+                device.subnetMask = device.interfaces.wan.subnetMask;
                 return device;
             }
+            if (device.interfaces.lan && device.interfaces.lan.ip === ip) {
+                device.ip = ip; // Απλά βάλε το IP στο object
+                device.subnetMask = device.interfaces.lan.subnetMask;
+                return device;
+            }
+            if (device.interfaces.lan2 && device.interfaces.lan2.ip === ip) {
+                device.ip = ip; // Απλά βάλε το IP στο object
+                device.subnetMask = device.interfaces.lan2.subnetMask;
+                return device;
+            }
+        } else if (device.ip === ip) {
+            return device;
         }
-        
-        return null;
     }
+    
+    return null;
+}
     
     // Βρείτε συσκευή με βάση το domain name
     getDeviceByDomain(domain, globalDnsRecords) {
@@ -761,15 +770,15 @@ makeDeviceDraggable(deviceEl, device) {
             }
         }
         
-        // LAN Interface - ΣΥΝΧΡΟΝΙΖΟΥΜΕ ΚΑΙ ΤΑ ΔΥΟ (lan και lan1)
+        // LAN Interface - ΣΥΝΧΡΟΝΙΖΟΥΜΕ ΚΑΙ ΤΑ ΔΥΟ (lan και lan2)
         if (lanIp !== undefined) {
             if (lanIp && lanIp !== 'N/A') {
                 if (!this.simpleIPCheck(lanIp)) {
                     throw new Error('Λάθος LAN IP: Κάθε αριθμός πρέπει να είναι 0-255 (π.χ. 192.168.1.1)');
                 }
                 router.interfaces.lan.ip = lanIp;
-                if (router.interfaces.lan1) {
-                    router.interfaces.lan1.ip = lanIp;
+                if (router.interfaces.lan) {
+                    router.interfaces.lan.ip = lanIp;
                 }
             }
         }
@@ -780,8 +789,8 @@ makeDeviceDraggable(deviceEl, device) {
                     throw new Error('Λάθος LAN Subnet: Μη έγκυρη μάσκα (π.χ. 255.255.255.0)');
                 }
                 router.interfaces.lan.subnetMask = lanSubnet;
-                if (router.interfaces.lan1) {
-                    router.interfaces.lan1.subnetMask = lanSubnet;
+                if (router.interfaces.lan) {
+                    router.interfaces.lan.subnetMask = lanSubnet;
                 }
             }
         }
@@ -792,8 +801,8 @@ makeDeviceDraggable(deviceEl, device) {
                     throw new Error('Λάθος LAN Gateway: Κάθε αριθμός πρέπει να είναι 0-255');
                 }
                 router.interfaces.lan.gateway = lanGateway;
-                if (router.interfaces.lan1) {
-                    router.interfaces.lan1.gateway = lanGateway;
+                if (router.interfaces.lan) {
+                    router.interfaces.lan.gateway = lanGateway;
                 }
             }
         }
@@ -804,8 +813,8 @@ makeDeviceDraggable(deviceEl, device) {
                     throw new Error('Λάθος LAN DNS: Κάθε αριθμός πρέπει να είναι 0-255');
                 }
                 router.interfaces.lan.dns = [lanDns];
-                if (router.interfaces.lan1) {
-                    router.interfaces.lan1.dns = [lanDns];
+                if (router.interfaces.lan) {
+                    router.interfaces.lan.dns = [lanDns];
                 }
             }
         }
