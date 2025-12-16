@@ -1033,6 +1033,13 @@ testCommunicationBetween(device1, device2) {
 }
     // Βοηθητική συνάρτηση για logging
     addLog(message, type = 'info') {
+        // Εμφάνιση κονσόλας κάθε φορά που προστίθεται log (όχι μόνο σε error)
+        if (typeof window.toggleConsole === 'function') {
+            const consoleElement = document.getElementById('console');
+            if (consoleElement && consoleElement.style.display === 'none') {
+                window.toggleConsole();
+            }
+        }
         if (typeof window.addLog === 'function') {
             window.addLog(message, type);
         } else {
