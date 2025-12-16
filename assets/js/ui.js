@@ -1173,30 +1173,36 @@ if (!safeAddListener('removeDeviceBtn', 'click', () => {
     }
     
     // Χειρισμός κλικ σε λειτουργία δοκιμής
-    handleTestModeClick(device) {
-        if (this.firstTestDevice === null) {
-            this.firstTestDevice = device;
-            device.element.classList.add('test-mode');
-            this.setModeText(`Επιλέξτε 2η συσκευή για δοκιμή από ${device.name}`);
-            this.addLog(`Επιλέχθηκε πρώτη συσκευή για δοκιμή: ${device.name}`, 'info');
-        } else if (this.firstTestDevice.id === device.id) {
-            device.element.classList.remove('test-mode');
-            this.firstTestDevice = null;
-            this.testMode = false;
-            if (this.buttons.testRoute) this.buttons.testRoute.classList.remove('active');
-            this.setModeText(`Επιλογή Συσκευών`);
-            this.addLog('Ακυρώθηκε η δοκιμή διαδρομής', 'info');
+handleTestModeClick(device) {
+    if (this.firstTestDevice === null) {
+        this.firstTestDevice = device;
+        device.element.classList.add('test-mode');
+        this.setModeText(`Επιλέξτε 2η συσκευή για δοκιμή από ${device.name}`);
+        this.addLog(`Επιλέχθηκε πρώτη συσκευή για δοκιμή: ${device.name}`, 'info');
+    } else if (this.firstTestDevice.id === device.id) {
+        device.element.classList.remove('test-mode');
+        this.firstTestDevice = null;
+        this.testMode = false;
+        if (this.buttons.testRoute) this.buttons.testRoute.classList.remove('active');
+        this.setModeText(`Επιλογή Συσκευών`);
+        this.addLog('Ακυρώθηκε η δοκιμή διαδρομής', 'info');
+    } else {
+        // ΔΙΟΡΘΩΣΗ: Καλείτε την σωστή μέθοδο από τον simulationManager
+        if (this.simulationManager && this.simulationManager.testCommunicationBetween) {
+            this.simulationManager.testCommunicationBetween(this.firstTestDevice, device);
+        } else if (typeof window.simulator !== 'undefined' && window.simulator.simulationManager) {
+            window.simulator.simulationManager.testCommunicationBetween(this.firstTestDevice, device);
         } else {
-            this.testCommunicationBetween(this.firstTestDevice, device);
-            
-            this.firstTestDevice.element.classList.remove('test-mode');
-            this.firstTestDevice = null;
-            this.testMode = false;
-            if (this.buttons.testRoute) this.buttons.testRoute.classList.remove('active');
-            this.setModeText(`Επιλογή Συσκευών`);
+            this.addLog('Δεν είναι διαθέσιμη η δυνατότητα δοκιμής επικοινωνίας', 'error');
         }
+        
+        this.firstTestDevice.element.classList.remove('test-mode');
+        this.firstTestDevice = null;
+        this.testMode = false;
+        if (this.buttons.testRoute) this.buttons.testRoute.classList.remove('active');
+        this.setModeText(`Επιλογή Συσκευών`);
     }
-    
+}    
     // Χειρισμός κλικ σε χειροκίνητο DNS
     handleManualDNSModeClick(device) {
         if (this.dnsSourceDevice === null) {
@@ -1543,38 +1549,19 @@ if (!safeAddListener('removeDeviceBtn', 'click', () => {
         }
     }
     
-    testAutoDNSFromDevice(device) {
-        if (typeof window.simulator !== 'undefined') {
-            window.simulator.testAutoDNSFromDevice(device);
-        } else {
-            this.addLog('Το σύστημα δεν είναι έτοιμο ακόμα.', 'warning');
-        }
+testAutoDNSFromDevice(device) {
+    if (typeof window.simulator !== 'undefined') {
+        // delegate to SimulationManager, pass managers/ui
+        window.simulator.simulationManager.testAutoDNSFromDevice(
+            device,
+            window.deviceManager,
+            window.dnsManager,
+            window.uiManager
+        );
+    } else {
+        this.addLog('System not ready', 'warning');
     }
-    
-    testManualDNSFromDevice(device) {
-        this.toggleManualDNSMode();
-        if (this.manualDNSMode) {
-            this.handleManualDNSModeClick(device);
-        }
-    }
-    
-    testCommunicationBetween(device1, device2) {
-        if (typeof window.simulator !== 'undefined') {
-            window.simulator.testCommunicationBetween(device1, device2);
-        } else {
-            this.addLog('Το σύστημα δεν είναι έτοιμο ακόμα.', 'warning');
-        }
-    }
-    
-    testDNSQuery(fromDevice, dnsServerDevice, domain) {
-        if (typeof window.simulator !== 'undefined') {
-            return window.simulator.testDNSQuery(fromDevice, dnsServerDevice, domain);
-        } else {
-            this.addLog('Το σύστημα δεν είναι έτοιμο ακόμα.', 'warning');
-            return null;
-        }
-    }
-    
+}    
     // CRUD operations
     updateRouterConfig(router) {
         // Παίρνουμε όλες τις τιμές από τα πεδία
