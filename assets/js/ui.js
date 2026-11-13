@@ -69,8 +69,6 @@ class UIManager {
             testRoute: this.getSafeElement('testRouteBtn'),
             testDNS: this.getSafeElement('testDNSBtn'),
             manualDNS: this.getSafeElement('manualDNSBtn'),
-            addLan: this.getSafeElement('addLanBtn'),
-            addWan: this.getSafeElement('addWanBtn'),
             debug: this.getSafeElement('debugBtn'),
             autoRoute: this.getSafeElement('autoRouteBtn')
         };
@@ -182,8 +180,6 @@ class UIManager {
             { button: this.buttons.testRoute, handler: () => this.toggleTestMode(), name: 'testRoute' },
             { button: this.buttons.testDNS, handler: () => this.testAutoDNS(), name: 'testDNS' },
             { button: this.buttons.manualDNS, handler: () => this.toggleManualDNSMode(), name: 'manualDNS' },
-            { button: this.buttons.addLan, handler: () => this.createPredefinedLan(), name: 'addLan' },
-            { button: this.buttons.addWan, handler: () => this.createPredefinedWan(), name: 'addWan' },
             { button: this.buttons.debug, handler: () => this.debugInfo(), name: 'debug' },
             { button: this.buttons.autoRoute, handler: () => this.autoConfigureRouting(), name: 'autoRoute' }
         ];
@@ -1727,24 +1723,6 @@ removeConnectionById(connId) {
             } else {
                 this.addLog('Το σύστημα δεν είναι έτοιμο ακόμα.', 'warning');
             }
-        }
-    }
-    
-    createPredefinedLan() {
-        if (typeof window.simulator !== 'undefined') {
-            window.simulator.createPredefinedLan();
-            this.updateNetworkStats();
-        } else {
-            this.addLog('Το σύστημα δεν είναι έτοιμο ακόμα.', 'warning');
-        }
-    }
-    
-    createPredefinedWan() {
-        if (typeof window.simulator !== 'undefined') {
-            window.simulator.createPredefinedWan();
-            this.updateNetworkStats();
-        } else {
-            this.addLog('Το σύστημα δεν είναι έτοιμο ακόμα.', 'warning');
         }
     }
     

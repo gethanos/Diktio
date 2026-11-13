@@ -23,6 +23,9 @@ export async function bootApp(dir) {
   process.removeAllListeners('uncaughtException'); process.removeAllListeners('unhandledRejection');
   process.on('uncaughtException', e => errors.push('UNCAUGHT ' + (e.stack ?? e).toString().slice(0, 400)));
   process.on('unhandledRejection', e => errors.push('REJECTION ' + (e?.stack ?? e).toString().slice(0, 400)));
+  // Το δικό του DOMContentLoaded το jsdom το στέλνει πρώτα. Τα scripts τρέχουν μετά και η εφαρμογή
+  // παίρνει ένα μόνο DOMContentLoaded (το δικό μας), όπως στον browser.
+  if (w.document.readyState === 'loading') await new Promise(r => w.document.addEventListener('DOMContentLoaded', r));
   const inline = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m => m[1]);
   // classic scripts in order
   for (const src of [...html.matchAll(/<script src="([^"]+)"><\/script>/g)].map(m => m[1])) {

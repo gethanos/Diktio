@@ -219,82 +219,6 @@ createDemoConnections(router, switchDev, dnsServer, computer, server) {
     }
 }
     // Συναρτήσεις για προκαθορισμένα δίκτυα
-    createPredefinedLan() {
-        this.clearWorkspace();
-        this.uiManager.addLog('Δημιουργία προκαθορισμένου LAN δικτύου...', 'info');
-        
-        const router = this.uiManager.addDeviceToWorkspace('router', '#3498db');
-        const switchDev = this.uiManager.addDeviceToWorkspace('switch', '#2ecc71');
-        const computer1 = this.uiManager.addDeviceToWorkspace('computer', '#e74c3c');
-        const server = this.uiManager.addDeviceToWorkspace('server', '#9b59b6');
-        const dnsServer = this.uiManager.addDeviceToWorkspace('dns', '#9b59b6');
-        
-        setTimeout(() => {
-            this.positionDevice(router, 100, 100);
-            this.positionDevice(switchDev, 300, 100);
-            this.positionDevice(computer1, 500, 50);
-            this.positionDevice(server, 500, 150);
-            this.positionDevice(dnsServer, 300, 300);
-            
-            // Ρυθμίσεις Router
-            router.interfaces.lan.ip = '192.168.1.1';
-            router.interfaces.lan.subnetMask = '255.255.255.0';
-            router.interfaces.lan.dns = ['192.168.1.53'];
-            router.element.querySelector('.device-ip').innerHTML = `WAN: N/A<br>LAN: 192.168.1.1`;
-            
-            // Ρυθμίσεις DNS Server
-            dnsServer.ip = '192.168.1.53';
-            dnsServer.gateway = '192.168.1.1';
-            dnsServer.dns = ['192.168.1.53'];
-            dnsServer.element.querySelector('.device-ip').textContent = '192.168.1.53';
-            
-            // Ρυθμίσεις Computer
-            computer1.ip = '192.168.1.10';
-            computer1.gateway = '192.168.1.1';
-            computer1.dns = ['192.168.1.53'];
-            computer1.element.querySelector('.device-ip').textContent = '192.168.1.10';
-            
-            // Ρυθμίσεις Server
-            server.ip = '192.168.1.100';
-            server.gateway = '192.168.1.1';
-            server.dns = ['192.168.1.53'];
-            server.element.querySelector('.device-ip').textContent = '192.168.1.100';
-            
-            setTimeout(() => {
-                this.assignDomain(server, 'fileserver.local');
-                
-                try {
-                    this.connectionManager.createConnection(router, switchDev);
-                    this.connectionManager.createConnection(switchDev, dnsServer);
-                    this.connectionManager.createConnection(switchDev, server);
-                    this.connectionManager.createConnection(switchDev, computer1);
-                    this.connectionManager.updateAllConnections(this.deviceManager.devices);
-                    
-                    // EXTREME DEBUGGING
-                    this.debugNetworkState();
-                    
-                    this.uiManager.deviceManager.selectDevice(router);
-                    
-                    this.uiManager.addLog('Προκαθορισμένο LAN δημιουργήθηκε!', 'success');
-                    this.uiManager.addLog('Δοκιμή διαδρομής: Επιλέξτε "Δοκιμή Διαδρομής" στον υπολογιστή', 'info');
-                } catch (error) {
-                    this.uiManager.addLog(`Σφάλμα: ${error.message}`, 'error');
-                }
-            }, 100);
-        }, 100);
-    }
-    
-async createPredefinedWan() {
-        try {
-            const response = await fetch('data/models/predefined-wan.json');
-            const { data, warnings } = window.workspaceManager.validateWorkspace(await response.json());
-            window.workspaceManager.applyWorkspace(data, warnings);
-            this.uiManager.addLog('Φορτώθηκε το προκαθορισμένο WAN', 'success');
-        } catch (error) {
-            this.uiManager.addLog(`Σφάλμα φόρτωσης WAN: ${error.message}`, 'error');
-        }
-    }
-
     clearWorkspace() {
         if (this.simulationManager.isSimulating) {
             this.simulationManager.stopSimulation();
@@ -820,8 +744,6 @@ document.addEventListener('DOMContentLoaded', async function() {
     window.simulator = simulator;
     
     // Εξαγωγή συναρτήσεων για χρήση από buttons
-    window.createPredefinedLan = () => simulator.createPredefinedLan();
-    window.createPredefinedWan = () => simulator.createPredefinedWan();
     window.clearWorkspace = () => simulator.clearWorkspace();
     window.toggleSimulation = () => simulator.toggleSimulation();
     window.testPingBetweenDevices = () => simulator.testPingBetweenDevices();

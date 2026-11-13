@@ -304,6 +304,18 @@ await scenario('W8 Two_Offices_Static_Routing model', async (env, t) => {
   t('A1 -> B1 without the return route', false, env.ping(p('Υπολογιστής Α1'), p('Υπολογιστής Β1')));
 });
 
+await scenario('W9 predefined LAN and LAN+Internet models', async (env, t) => {
+  const { load } = await workspaceEnv(env);
+  await load(model('predefined-lan.json'));
+  await new Promise(r => setTimeout(r, 1500));
+  const p = n => byName(env.dm, n);
+  t('LAN: PC -> DNS Server', true, env.ping(p('Υπολογιστής 3'), p('DNS Server 5')));
+  await load(model('predefined-wan.json'));
+  await new Promise(r => setTimeout(r, 1500));
+  t('WAN: PC -> Cloud (NAT)', true, env.ping(p('Υπολογιστής 4'), p('Cloud (WAN) 1')));
+  t('WAN: Cloud -> PC (no inbound)', false, env.ping(p('Cloud (WAN) 1'), p('Υπολογιστής 4')));
+});
+
 // ---------- firewall: συσκευή με IP διαχείρισης ----------
 await scenario('F1 firewall behaves as a host on its LAN', async (env, t) => {
   const { host, add, link, fix } = env;
