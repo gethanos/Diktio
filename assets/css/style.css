@@ -734,14 +734,21 @@ body {
 }
 
 .workspace {
-    width: 100%;
-    height: 100%;
+    /* Μεγαλύτερο από την οθόνη: μετακίνηση της προβολής με σύρσιμο στο κενό (UIManager.setupWorkspacePanning) */
+    width: 3000px;
+    height: 2000px;
+    min-width: 100%;
     position: relative;
     min-height: 100%;
+    cursor: grab;
     background: 
         linear-gradient(90deg, var(--grid-color) 1px, transparent 1px) 0 0 / 30px 30px,
         linear-gradient(var(--grid-color) 1px, transparent 1px) 0 0 / 30px 30px;
-    overflow: auto;
+}
+
+.workspace.panning {
+    cursor: grabbing;
+    user-select: none;
 }
 
 /* ==========================================================================
@@ -1233,7 +1240,8 @@ body {
     font-size: 0.95rem;
 }
 
-.form-group input {
+.form-group input,
+.form-group select {
     width: 100%;
     padding: 12px;
     border: 2px solid var(--input-border);
@@ -1244,7 +1252,8 @@ body {
     color: var(--text-primary);
 }
 
-.form-group input:focus {
+.form-group input:focus,
+.form-group select:focus {
     outline: none;
     border-color: var(--input-focus);
     box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
@@ -1919,4 +1928,22 @@ body {
     0% { box-shadow: 0 0 5px #ffcc00; }
     50% { box-shadow: 0 0 15px #ffcc00; }
     100% { box-shadow: 0 0 5px #ffcc00; }
+}
+
+/* Διπλότυπη IP στο ίδιο δίκτυο (DeviceManager.refreshDuplicateIPWarnings) */
+.device.duplicate-ip-warning {
+    border-color: #ffcc00 !important;
+}
+
+.duplicate-ip-icon {
+    position: absolute;
+    top: -10px;
+    right: -10px;
+    font-size: 20px;
+    z-index: 100;
+}
+
+/* Κουμπιά στις γραμμές κανόνων firewall / διαδρομών */
+.interface-item-content .btn-sm + .btn-sm {
+    margin-left: 6px;
 }

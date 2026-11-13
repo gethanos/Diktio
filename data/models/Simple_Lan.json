@@ -5,7 +5,7 @@
     "version": "2.0",
     "app": "Network Simulator",
     "deviceCount": 5,
-    "connectionCount": 5
+    "connectionCount": 4
   },
   "devices": [
     {
@@ -22,7 +22,6 @@
       "status": "online",
       "connectionInterfaces": {},
       "connections": [
-        "conn_1765547232213_jybx4vl3e",
         "conn_1765547232217_2114smobu",
         "conn_1765547232218_yswhisz9p",
         "conn_1765547232219_mrgujkdp4",
@@ -110,12 +109,6 @@
     }
   ],
   "connections": [
-    {
-      "id": "conn_1765547232213_jybx4vl3e",
-      "device1Id": "device-1",
-      "device2Id": "device-2",
-      "status": "connected"
-    },
     {
       "id": "conn_1765547232217_2114smobu",
       "device1Id": "device-2",

@@ -285,42 +285,16 @@ createDemoConnections(router, switchDev, dnsServer, computer, server) {
     }
     
 async createPredefinedWan() {
-    try {
-        // ΑΚΡΙΒΩΣ ΙΔΙΟ ΜΕ ΤΟ LAN - ίδια διαδρομή
-        const response = await fetch('data/models/predefined-wan.json');
-        const jsonData = await response.json();
-        
-        console.log("1. Clearing workspace...");
-        this.clearWorkspace();
-        await new Promise(resolve => setTimeout(resolve, 300));
-        
-        console.log("2. Restoring devices...");
-        for (const deviceData of jsonData.devices) {
-            await window.workspaceManager.restoreDevice(deviceData);
+        try {
+            const response = await fetch('data/models/predefined-wan.json');
+            const { data, warnings } = window.workspaceManager.validateWorkspace(await response.json());
+            window.workspaceManager.applyWorkspace(data, warnings);
+            this.uiManager.addLog('Φορτώθηκε το προκαθορισμένο WAN', 'success');
+        } catch (error) {
+            this.uiManager.addLog(`Σφάλμα φόρτωσης WAN: ${error.message}`, 'error');
         }
-        
-        console.log("3. Restoring connections WITHOUT createConnection...");
-        await window.workspaceManager.simpleRestoreConnections(jsonData);
-        
-        console.log("4. Checking connection count:", this.connectionManager.connections.length);
-        
-        console.log("5. Restoring DNS...");
-        if (jsonData.dnsRecords) {
-            Object.assign(this.dnsManager.globalDnsRecords, jsonData.dnsRecords);
-        }
-        
-        console.log("6. Updating visuals (without canDevicesCommunicateDirectly)...");
-        setTimeout(() => {
-            // ΜΟΝΟ οπτική ενημέρωση, ΧΩΡΙΣ επαναυπολογισμό επικοινωνίας
-            this.connectionManager.updateConnectionsVisual();
-            
-            this.uiManager.addLog('Predefined WAN loaded!', 'success');
-        }, 500);
-        
-    } catch (error) {
-        this.uiManager.addLog(`Error loading WAN: ${error.message}`, 'error');
     }
-}    
+
     clearWorkspace() {
         if (this.simulationManager.isSimulating) {
             this.simulationManager.stopSimulation();
@@ -369,8 +343,21 @@ async createPredefinedWan() {
     }
     
     testPingFromDevice(fromDevice) {
-        // Χρήση της νέας μεθόδου που θα προσθέσουμε στο simulation.js
         return this.simulationManager.testPingFromDeviceWithPrompt(fromDevice, this.deviceManager);
+    }
+
+    // Δοκιμή υπηρεσίας TCP/UDP (π.χ. tcp/80): ίδια διαδρομή με το ping, αλλά με κανόνες firewall για τη θύρα
+    testServiceFromDevice(fromDevice) {
+        const input = prompt('Υπηρεσία προς δοκιμή (πρωτόκολλο/θύρα):\n\nπ.χ. tcp/80 (HTTP), tcp/443 (HTTPS), tcp/22 (SSH), udp/53 (DNS)', 'tcp/80');
+        if (!input) return null;
+
+        const match = input.trim().toLowerCase().match(/^(tcp|udp)\/(\d{1,5})$/);
+        const port = match ? Number(match[2]) : 0;
+        if (!match || port < 1 || port > 65535) {
+            alert(`Μη έγκυρη υπηρεσία: "${input}"\n\nΜορφή: tcp/θύρα ή udp/θύρα, π.χ. tcp/80`);
+            return null;
+        }
+        return this.simulationManager.testPingFromDeviceWithPrompt(fromDevice, this.deviceManager, { protocol: match[1], port });
     }
     
     testCommunicationBetween(device1, device2) {
@@ -501,12 +488,13 @@ async createPredefinedWan() {
             return null;
         }
         
-        // 2. DNS Query από πηγή προς DNS server
-        const dnsQueryPath = this.connectionManager.findPathBetweenDevices(fromDevice, dnsServerDevice);
-        if (!dnsQueryPath) {
-            this.uiManager.addLog(`DNS QUERY ΑΠΟΤΥΧΙΑ: Δεν υπάρχει διαδρομή προς τον DNS server ${dnsServerDevice.name}`, 'error');
+        // 2. DNS Query (UDP/53) από πηγή προς DNS server: δρομολόγηση, NAT και firewall όπως κάθε πακέτο
+        const reachability = this.connectionManager.canDevicesCommunicateWithPath(fromDevice, dnsServerDevice, { protocol: 'udp', port: 53 });
+        if (!reachability.canCommunicate) {
+            this.uiManager.addLog(`DNS QUERY ΑΠΟΤΥΧΙΑ προς ${dnsServerDevice.name}: ${this.simulationManager.describePingFailure(reachability)}`, 'error');
             return null;
         }
+        const dnsQueryPath = reachability.path;
         
         // Προσομοίωση DNS query
         this.dnsManager.visualizeDNSQuery(dnsQueryPath, fromDevice, dnsServerDevice, domain, 'query');
@@ -527,17 +515,10 @@ async createPredefinedWan() {
         }
     }
     
+    // Η εμφάνιση του κουμπιού ενημερώνεται από τον UIManager (updateSimulationButton)
     toggleSimulation() {
         try {
-            const isSimulating = this.simulationManager.toggleSimulation();
-            
-            if (isSimulating) {
-                this.uiManager.buttons.simulate.innerHTML = '<i class="fas fa-stop"></i> Διακοπή Προσομοίωσης';
-                this.uiManager.buttons.simulate.classList.add('active');
-            } else {
-                this.uiManager.buttons.simulate.innerHTML = '<i class="fas fa-play"></i> Προσομοίωση Κυκλοφορίας';
-                this.uiManager.buttons.simulate.classList.remove('active');
-            }
+            this.simulationManager.toggleSimulation();
         } catch (error) {
             alert(error.message);
             this.uiManager.addLog(`Σφάλμα: ${error.message}`, 'error');

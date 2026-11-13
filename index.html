@@ -420,7 +420,6 @@ SOFTWARE.
       }
         
         function addToConsole(message, type = 'info') {
-            console.trace(`[HTML Console] Adding: ${message.substring(0, 50)}...`);
             const consoleBody = document.getElementById('consoleBody');
             if (!consoleBody) return;
             
@@ -565,19 +564,20 @@ function showDevicePanel(device) {
         function showQuickStart() {
             const messages = [
                 "1. Κάντε κλικ σε συσκευές από το αριστερό πάνελ για να τις προσθέσετε",
-                "2. Σύρετε συσκευές για να τις μετακινήσετε",
+                "2. Σύρετε συσκευές για να τις μετακινήσετε· σύρετε το κενό για να μετακινήσετε την προβολή",
                 "3. Πατήστε 'Σύνδεση' και επιλέξτε 2 συσκευές για σύνδεση",
                 "4. Κάντε κλικ σε συσκευή για να δείτε τις ρυθμίσεις της",
-                "5. Χρησιμοποιήστε τα εργαλεία δοκιμών για ping, routing και DNS",
-                "6. Πατήστε 'Προσομοίωση' για αυτόματη κυκλοφορία δικτύου"
+                "5. Χρησιμοποιήστε τα εργαλεία δοκιμών για ping, routing, DNS και υπηρεσίες (TCP/UDP)",
+                "6. Πατήστε 'Έναρξη' στην Προσομοίωση για αυτόματη κυκλοφορία δικτύου",
+                "7. Πατήστε 'Μοντέλα' για έτοιμα σενάρια (π.χ. firewall, δύο γραφεία) ή F1 για βοήθεια"
             ];
             
             addToConsole('=== Γρήγορη Οδηγία ===', 'warning');
             messages.forEach(msg => addToConsole(msg, 'info'));
             addToConsole('=======================', 'warning');
             
-            // Show console if hidden
-            toggleConsole();
+            // Εμφάνιση της κονσόλας μόνο αν είναι κρυμμένη (το toggle θα την έκλεινε αν ήταν ανοιχτή)
+            if (document.getElementById('console').style.display === 'none') toggleConsole();
         }
         
         // Make functions available globally

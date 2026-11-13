@@ -21,6 +21,9 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
+import { subnetMaskToCIDR } from './network-core.js';
+import { FIREWALL_PORTS, describeRule } from './firewall.js';
+
 // Διαχείριση User Interface - ΒΕΛΤΙΩΜΕΝΟ ΓΙΑ COMPACT DESIGN
 class UIManager {
     constructor(deviceManager, connectionManager, dnsManager, simulationManager) {
@@ -100,13 +103,6 @@ class UIManager {
     
     // Αρχικοποίηση event listeners για compact design
     initializeEventListeners() {
-        // DEBUG: Παρακολούθηση πόσες φορές καλείται
-        if (!window.initializeEventListenersCount) {
-            window.initializeEventListenersCount = 0;
-        }
-        window.initializeEventListenersCount++;
-        console.error(`[DEBUG] initializeEventListeners called ${window.initializeEventListenersCount} times!`);
-        
         // Εάν έχουν ήδη προστεθεί listeners, ΜΗΝ ξαναπροσθέσεις
         if (this._listenersInitialized) {
             console.warn('[UI] ⚠️ Event listeners ALREADY initialized! Skipping...');
@@ -132,9 +128,14 @@ class UIManager {
         // Event Listeners για κουμπιά ελέγχου
         this.setupButtonListeners();
         
-        // Κλικ έξω από συσκευή για αποεπιλογή
+        // Κλικ έξω από συσκευή για αποεπιλογή (όχι μετά από μετακίνηση της προβολής)
         if (this.workspace) {
+            this.setupWorkspacePanning();
             this.workspace.addEventListener('click', (e) => {
+                if (this.workspacePanned) {
+                    this.workspacePanned = false;
+                    return;
+                }
                 if (e.target === this.workspace && 
                     !this.connectionMode && !this.testMode && 
                     !this.manualDNSMode) {
@@ -214,9 +215,10 @@ class UIManager {
             return null;
         }
         
-        const workspaceRect = this.workspace.getBoundingClientRect();
-        const x = Math.random() * (workspaceRect.width - 100) + 25;
-        const y = Math.random() * (workspaceRect.height - 100) + 25;
+        // Θέση μέσα στο ορατό τμήμα (το workspace είναι μεγαλύτερο από την οθόνη και μετακινείται)
+        const view = this.workspace.parentElement;
+        const x = view.scrollLeft + 25 + Math.random() * Math.max(0, view.clientWidth - 170);
+        const y = view.scrollTop + 25 + Math.random() * Math.max(0, view.clientHeight - 170);
         
         try {
             const device = this.deviceManager.addDevice(type, color, x, y, this.workspace);
@@ -266,6 +268,7 @@ class UIManager {
             case 'cloud': deviceTypeText = 'Cloud (WAN)'; break;
             case 'printer': deviceTypeText = 'Εκτυπωτής'; break;
             case 'dns': deviceTypeText = 'DNS Server'; break;
+            case 'firewall': deviceTypeText = 'Firewall (Τείχος προστασίας)'; break;
         }
 
         // Χρήση connectionManager
@@ -309,7 +312,9 @@ class UIManager {
         
         
         if (device.type === 'router') {
-            infoHTML += this.generateRouterConfigHTML(device);
+            infoHTML += this.generateRouterConfigHTML(device) + this.generateRoutingTableHTML(device);
+        } else if (device.type === 'firewall') {
+            infoHTML += this.generateFirewallConfigHTML(device);
         } else if (device.type === 'dns') {
             infoHTML += this.generateDNSConfigHTML(device);
         } else if (device.type === 'switch') {
@@ -377,8 +382,8 @@ generateRouterConfigHTML(router) {
             const otherDevice = this.deviceManager.getDeviceById(otherId);
             if (!otherDevice) return;
             
-            // ΠΡΟΣΔΙΟΡΙΣΜΟΣ ΣΩΣΤΟΥ INTERFACE - ΔΙΟΡΘΩΜΕΝΗ ΛΟΓΙΚΗ
-            let interfaceType = this.determineCorrectRouterInterface(router, otherDevice);
+            // Η διεπαφή αποθηκεύεται κατά τη σύνδεση (connectionInterfaces)
+            const interfaceType = router.connectionInterfaces?.[conn.id];
             
             // Προσθήκη στη λίστα του αντίστοιχου interface
             if (interfaceType && connectionsByInterface[interfaceType]) {
@@ -472,141 +477,6 @@ if (connectionsByInterface.lan2.length > 0) {
         interfaceConnectionsHTML += `</div>`;
     }
     
-    // Βοηθητική συνάρτηση για ΣΩΣΤΟ προσδιορισμό interface - ΔΙΟΡΘΩΜΕΝΗ
-    const determineCorrectRouterInterface = (router, connectedDevice) => {
-        // 1. Εάν είναι cloud, είναι πάντα WAN
-        if (connectedDevice.type === 'cloud') {
-            return 'wan';
-        }
-        
-        // 2. Ελέγχουμε αν η συσκευή έχει IP
-        if (!connectedDevice.ip || connectedDevice.ip === 'N/A') {
-            // Αν δεν έχει IP, ελέγχουμε αν είναι switch ή άλλη συσκευή
-            if (connectedDevice.type === 'switch' || connectedDevice.type === 'router') {
-                // Για switches/routers χωρίς IP, ελέγχουμε τις συνδέσεις τους
-                return this.determineInterfaceByConnectedDevices(router, connectedDevice);
-            }
-            return 'lan'; // Προεπιλογή
-        }
-        
-        // 3. ΕΛΕΓΧΟΣ ΜΕ ΒΑΣΗ ΤΑ ΔΙΚΤΥΑ ΤΟΥ ROUTER
-        
-        // Δημιουργία network strings για κάθε interface
-        const getNetwork = (ip, subnet) => {
-            if (!ip || ip === 'N/A') return null;
-            
-            const ipParts = ip.split('.');
-            const subnetParts = subnet.split('.');
-            
-            let network = '';
-            for (let i = 0; i < 4; i++) {
-                if (subnetParts[i] === '255') {
-                    network += ipParts[i];
-                } else {
-                    network += '0';
-                }
-                if (i < 3) network += '.';
-            }
-            return network;
-        };
-        
-        // LAN2 ελέγχος (μόνο αν είναι ενεργό)
-        if (router.interfaces.lan2 && router.interfaces.lan2.enabled) {
-            const lan2Network = getNetwork(router.interfaces.lan2.ip, router.interfaces.lan2.subnetMask);
-            const connectedNetwork = getNetwork(connectedDevice.ip, connectedDevice.subnetMask);
-            
-            if (lan2Network && connectedNetwork && lan2Network === connectedNetwork) {
-                return 'lan2';
-            }
-        }
-        
-        // LAN ελέγχος
-        if (router.interfaces.lan) {
-            const lanNetwork = getNetwork(router.interfaces.lan.ip, router.interfaces.lan.subnetMask);
-            const connectedNetwork = getNetwork(connectedDevice.ip, connectedDevice.subnetMask);
-            
-            if (lanNetwork && connectedNetwork && lanNetwork === connectedNetwork) {
-                return 'lan';
-            }
-        }
-        
-        // WAN ελέγχος (οτιδήποτε άλλο)
-        if (router.interfaces.wan) {
-            const wanNetwork = getNetwork(router.interfaces.wan.ip, router.interfaces.wan.subnetMask);
-            const connectedNetwork = getNetwork(connectedDevice.ip, connectedDevice.subnetMask);
-            
-            // Εάν η συσκευή δεν είναι στο ίδιο δίκτυο με WAN, LAN ή LAN2
-            if (!wanNetwork || wanNetwork !== connectedNetwork) {
-                return 'wan';
-            }
-        }
-        
-        // 4. ΕΙΔΙΚΗ ΠΕΡΙΠΤΩΣΗ: Routers μεταξύ τους
-        if (connectedDevice.type === 'router') {
-            // Ελέγχουμε πώς είναι συνδεδεμένοι οι routers
-            if (router.interfaces.wan && connectedDevice.ip) {
-                // Εάν το IP του άλλου router είναι στο WAN network του τρέχοντος router
-                const wanNetwork = getNetwork(router.interfaces.wan.ip, router.interfaces.wan.subnetMask);
-                const connectedNetwork = getNetwork(connectedDevice.ip, connectedDevice.subnetMask);
-                
-                if (wanNetwork && connectedNetwork && wanNetwork === connectedNetwork) {
-                    return 'wan';
-                }
-            }
-            
-            // Ελέγχουμε για LAN ή LAN2 βάσει IP
-            if (connectedDevice.ip) {
-                // LAN2
-                if (router.interfaces.lan2 && router.interfaces.lan2.enabled) {
-                    const lan2Network = getNetwork(router.interfaces.lan2.ip, router.interfaces.lan2.subnetMask);
-                    const connectedNetwork = getNetwork(connectedDevice.ip, connectedDevice.subnetMask);
-                    
-                    if (lan2Network && connectedNetwork && lan2Network === connectedNetwork) {
-                        return 'lan2';
-                    }
-                }
-                
-                // LAN
-                if (router.interfaces.lan) {
-                    const lanNetwork = getNetwork(router.interfaces.lan.ip, router.interfaces.lan.subnetMask);
-                    const connectedNetwork = getNetwork(connectedDevice.ip, connectedDevice.subnetMask);
-                    
-                    if (lanNetwork && connectedNetwork && lanNetwork === connectedNetwork) {
-                        return 'lan';
-                    }
-                }
-            }
-        }
-        
-        // Προεπιλογή: LAN
-        return 'lan';
-    };
-    
-    // Βοηθητική για switches/routers χωρίς IP
-    const determineInterfaceByConnectedDevices = (router, connectedDevice) => {
-        // Ελέγχουμε τις συσκευές που είναι συνδεδεμένες στο switch/router
-        if (connectedDevice.connections && connectedDevice.connections.length > 0) {
-            for (const connId of connectedDevice.connections) {
-                const conn = this.connectionManager.connections.find(c => c.id === connId);
-                if (!conn) continue;
-                
-                const otherId = conn.device1Id === connectedDevice.id ? conn.device2Id : conn.device1Id;
-                if (otherId === router.id) continue; // Παραλείπουμε τον ίδιο τον router
-                
-                const otherDevice = this.deviceManager.getDeviceById(otherId);
-                if (otherDevice && otherDevice.ip && otherDevice.ip !== 'N/A') {
-                    // Χρησιμοποιούμε το IP αυτής της συσκευής για να καθορίσουμε το interface
-                    return determineCorrectRouterInterface(router, otherDevice);
-                }
-            }
-        }
-        
-        return 'lan'; // Προεπιλογή
-    };
-    
-    // Αποθήκευση των βοηθητικών συναρτήσεων
-    this.determineCorrectRouterInterface = determineCorrectRouterInterface;
-    this.determineInterfaceByConnectedDevices = determineInterfaceByConnectedDevices;
     
     // Κύριο HTML για ρυθμίσεις router
 const mainConfigHTML = `
@@ -827,6 +697,9 @@ generateDNSConfigHTML(dnsDevice) {
                     <button class="btn btn-info" id="quickManualDNSBtn">
                         <i class="fas fa-hand-pointer"></i> Χειροκίνητο
                     </button>
+                    <button class="btn btn-secondary" id="quickServiceBtn" style="grid-column: span 2;">
+                        <i class="fas fa-plug"></i> Υπηρεσία (TCP/UDP)
+                    </button>
                 </div>
             </div>
         `;
@@ -924,7 +797,7 @@ if (!safeAddListener('removeDeviceBtn', 'click', () => {
         }
         
         // Quick test buttons
-        ['quickPingBtn', 'quickRouteBtn', 'quickDNSBtn', 'quickManualDNSBtn'].forEach(btnId => {
+        ['quickPingBtn', 'quickRouteBtn', 'quickDNSBtn', 'quickManualDNSBtn', 'quickServiceBtn'].forEach(btnId => {
             if (!safeAddListener(btnId, 'click', () => {
                 this.handleQuickTest(device, btnId);
             })) {
@@ -961,7 +834,7 @@ if (!safeAddListener('removeDeviceBtn', 'click', () => {
             
             // Delete DNS record buttons
             setTimeout(() => {
-                document.querySelectorAll('.delete-dns-record').forEach(btn => {
+                document.querySelectorAll('.dns-record-delete-btn').forEach(btn => {
                     const newBtn = btn.cloneNode(true);
                     btn.parentNode.replaceChild(newBtn, btn);
                     
@@ -984,6 +857,9 @@ if (!safeAddListener('removeDeviceBtn', 'click', () => {
                 console.warn(`[UI] updateDeviceBtn not found for ${device.type} ${device.name}`);
             }
         }
+        
+        if (device.type === 'router') this.addRoutingTableListeners(device);
+        if (device.type === 'firewall') this.addFirewallListeners(device);
         
         // Delete connection buttons
         setTimeout(() => {
@@ -1015,6 +891,9 @@ if (!safeAddListener('removeDeviceBtn', 'click', () => {
             case 'quickManualDNSBtn':
                 this.testManualDNSFromDevice(device);
                 break;
+            case 'quickServiceBtn':
+                this.testServiceFromDevice(device);
+                break;
         }
     }
     
@@ -1022,7 +901,7 @@ if (!safeAddListener('removeDeviceBtn', 'click', () => {
     showTestMenu(device) {
         const menuHTML = `
             <div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 2000; display: flex; align-items: center; justify-content: center;">
-                <div style="background: white; padding: 20px; border-radius: 8px; max-width: 400px; width: 90%;">
+                <div style="background: var(--bg-primary); color: var(--text-primary); padding: 20px; border-radius: 8px; max-width: 400px; width: 90%;">
                     <h4 style="margin-bottom: 15px;">Δοκιμές από ${device.name}</h4>
                     <div style="display: grid; grid-template-columns: 1fr; gap: 10px;">
                         <button class="btn btn-primary" id="menuPingBtn">
@@ -1036,6 +915,9 @@ if (!safeAddListener('removeDeviceBtn', 'click', () => {
                         </button>
                         <button class="btn btn-info" id="menuManualDNSBtn">
                             <i class="fas fa-hand-pointer"></i> Χειροκίνητο DNS
+                        </button>
+                        <button class="btn btn-secondary" id="menuServiceBtn">
+                            <i class="fas fa-plug"></i> Δοκιμή Υπηρεσίας (TCP/UDP)
                         </button>
                         <button class="btn btn-secondary" id="menuCancelBtn">
                             <i class="fas fa-times"></i> Ακύρωση
@@ -1068,6 +950,11 @@ if (!safeAddListener('removeDeviceBtn', 'click', () => {
         document.getElementById('menuManualDNSBtn').addEventListener('click', () => {
             menuDiv.remove();
             this.testManualDNSFromDevice(device);
+        });
+        
+        document.getElementById('menuServiceBtn').addEventListener('click', () => {
+            menuDiv.remove();
+            this.testServiceFromDevice(device);
         });
         
         document.getElementById('menuCancelBtn').addEventListener('click', () => {
@@ -1276,8 +1163,6 @@ if (!safeAddListener('removeDeviceBtn', 'click', () => {
     
     // Προσθήκη μηνύματος στο log
     addLog(message, type = 'info') {
-        console.trace(`[LOG SOURCE] Called with: ${message.substring(0, 50)}...`);
-        
         // Προσθήκη στο παλιό log panel για συμβατότητα
         if (this.logPanel) {
             try {
@@ -1469,7 +1354,7 @@ if (!safeAddListener('removeDeviceBtn', 'click', () => {
                 case 'a':
                     if (e.ctrlKey) {
                         e.preventDefault();
-                        const types = ['router', 'switch', 'computer', 'server', 'dns', 'cloud', 'printer'];
+                        const types = ['router', 'switch', 'computer', 'server', 'dns', 'cloud', 'printer', 'firewall'];
                         const randomType = types[Math.floor(Math.random() * types.length)];
                         const color = this.getColorForType(randomType);
                         this.addDeviceToWorkspace(randomType, color);
@@ -1499,7 +1384,8 @@ if (!safeAddListener('removeDeviceBtn', 'click', () => {
             'server': '#9b59b6',
             'cloud': '#f39c12',
             'printer': '#34495e',
-            'dns': '#9b59b6'
+            'dns': '#9b59b6',
+            'firewall': '#e74c3c'
         };
         return colors[type] || '#3498db';
     }
@@ -1599,18 +1485,18 @@ if (!safeAddListener('removeDeviceBtn', 'click', () => {
         const configData = {
             wanIp: wanIp || router.interfaces.wan.ip,
             wanSubnet: wanSubnet || router.interfaces.wan.subnetMask,
-            wanGateway: wanGateway || router.interfaces.wan.gateway,
-            wanDns: wanDns || router.interfaces.wan.dns?.[0],
+            wanGateway: wanGateway ?? router.interfaces.wan.gateway,
+            wanDns: wanDns ?? router.interfaces.wan.dns?.[0],
             
             lanIp: lanIp || router.interfaces.lan.ip,
             lanSubnet: lanSubnet || router.interfaces.lan.subnetMask,
-            lanGateway: lanGateway || router.interfaces.lan.gateway,
-            lanDns: lanDns || router.interfaces.lan.dns?.[0],
+            lanGateway: lanGateway ?? router.interfaces.lan.gateway,
+            lanDns: lanDns ?? router.interfaces.lan.dns?.[0],
             
             lan2Ip: lan2Ip || router.interfaces.lan2.ip,
             lan2Subnet: lan2Subnet || router.interfaces.lan2.subnetMask,
-            lan2Gateway: lan2Gateway || router.interfaces.lan2.gateway,
-            lan2Dns: lan2Dns || router.interfaces.lan2.dns?.[0],
+            lan2Gateway: lan2Gateway ?? router.interfaces.lan2.gateway,
+            lan2Dns: lan2Dns ?? router.interfaces.lan2.dns?.[0],
             lan2Enabled: lan2Enabled !== undefined ? lan2Enabled : router.interfaces.lan2.enabled
         };
         
@@ -1683,8 +1569,8 @@ updateDeviceConfig(device) {
     const configData = {
         ip: ipInput?.value?.trim() || (device.type === 'switch' ? 'N/A' : device.ip),
         subnet: subnetInput?.value?.trim() || device.subnetMask,
-        gateway: gatewayInput?.value?.trim() || device.gateway,
-        dns: dnsInput?.value?.trim() || device.dns?.[0],
+        gateway: gatewayInput ? gatewayInput.value.trim() : device.gateway,
+        dns: dnsInput ? dnsInput.value.trim() : device.dns?.[0],
         domainName: domainInput?.value?.trim() || device.domainName
     };
     
@@ -1873,6 +1759,286 @@ removeConnectionById(connId) {
     autoConfigureRouting() {
         if (typeof window.simulator !== 'undefined') {
             window.simulator.autoConfigureRouting();
+        } else {
+            this.addLog('Το σύστημα δεν είναι έτοιμο ακόμα.', 'warning');
+        }
+    }
+
+    // Μετακίνηση της προβολής: παρατεταμένο κλικ στο κενό του workspace και σύρσιμο.
+    // Το workspace είναι μεγαλύτερο από την οθόνη, οπότε η μετακίνηση γίνεται με scroll του container
+    // και οι συντεταγμένες των συσκευών δεν αλλάζουν. Στην αφή λειτουργεί το φυσικό scroll.
+    setupWorkspacePanning() {
+        const view = this.workspace.parentElement;
+        let start = null;
+
+        this.workspace.addEventListener('mousedown', (e) => {
+            if (e.button !== 0 || e.target !== this.workspace) return;
+            start = { x: e.clientX, y: e.clientY, left: view.scrollLeft, top: view.scrollTop };
+            this.workspacePanned = false;
+            e.preventDefault();
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (!start) return;
+            const dx = e.clientX - start.x;
+            const dy = e.clientY - start.y;
+            if (!this.workspacePanned && Math.hypot(dx, dy) < 4) return;
+            this.workspacePanned = true;
+            this.workspace.classList.add('panning');
+            view.scrollLeft = start.left - dx;
+            view.scrollTop = start.top - dy;
+        });
+
+        document.addEventListener('mouseup', () => {
+            start = null;
+            this.workspace.classList.remove('panning');
+        });
+    }
+
+    // Στατικές διαδρομές router (οι συνδεδεμένες προκύπτουν από τις διεπαφές)
+    generateRoutingTableHTML(router) {
+        const routes = router.routingTable || [];
+        const rows = routes.map((route, index) => `
+            <div class="interface-item">
+                <div class="interface-item-content">
+                    <div class="interface-item-details">
+                        <div class="interface-device-name">${route.network}/${subnetMaskToCIDR(route.mask)}</div>
+                        <div class="interface-info">${route.gateway === '0.0.0.0' ? 'απευθείας συνδεδεμένο' : `μέσω ${route.gateway}`} • ${String(route.interface).toUpperCase()} • metric ${route.metric ?? 0}</div>
+                    </div>
+                    <button class="btn btn-sm btn-danger" data-route-index="${index}" title="Διαγραφή διαδρομής">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            </div>
+        `).join('');
+
+        const interfaceOptions = ['wan', 'lan', 'lan2']
+            .filter(name => router.interfaces[name]?.ip && router.interfaces[name].ip !== 'N/A' && router.interfaces[name].enabled !== false)
+            .map(name => `<option value="${name}">${name.toUpperCase()} (${router.interfaces[name].ip})</option>`)
+            .join('');
+
+        return `
+            <div class="config-panel">
+                <h4><i class="fas fa-route"></i> Πίνακας Δρομολόγησης</h4>
+                <div id="routingTableList">
+                    ${rows || '<p class="text-muted">Καμία διαδρομή. Τα δίκτυα των διεπαφών είναι πάντα προσβάσιμα.</p>'}
+                </div>
+                <div class="form-group">
+                    <label for="routeNetwork">Δίκτυο προορισμού:</label>
+                    <input type="text" id="routeNetwork" placeholder="192.168.3.0">
+                </div>
+                <div class="form-group">
+                    <label for="routeMask">Μάσκα:</label>
+                    <input type="text" id="routeMask" placeholder="255.255.255.0">
+                </div>
+                <div class="form-group">
+                    <label for="routeGateway">Επόμενο βήμα (gateway):</label>
+                    <input type="text" id="routeGateway" placeholder="10.0.0.2">
+                </div>
+                <div class="form-group">
+                    <label for="routeInterface">Διεπαφή εξόδου:</label>
+                    <select id="routeInterface">${interfaceOptions}</select>
+                </div>
+                <button class="btn btn-success" id="addRouteBtn" style="width: 100%;">
+                    <i class="fas fa-plus"></i> Προσθήκη διαδρομής
+                </button>
+            </div>
+        `;
+    }
+
+    addRoutingTableListeners(router) {
+        // onclick/onchange (όχι addEventListener): το panel μπορεί να αποδοθεί δύο φορές στη σειρά
+        // και ο χειριστής πρέπει να υπάρχει μία φορά
+        const list = document.getElementById('routingTableList');
+        if (list) list.onclick = (e) => {
+            const button = e.target.closest('[data-route-index]');
+            if (!button) return;
+            const route = this.deviceManager.removeRoute(router, Number(button.dataset.routeIndex));
+            this.addLog(`Διαγράφηκε η διαδρομή ${route.network}/${subnetMaskToCIDR(route.mask)} από τον ${router.name}`, 'info');
+            this.updateDeviceInfo(router);
+        };
+
+        const addButton = document.getElementById('addRouteBtn');
+        if (addButton) addButton.onclick = () => {
+            const value = id => document.getElementById(id)?.value.trim() ?? '';
+            try {
+                const route = this.deviceManager.addRoute(router, {
+                    network: value('routeNetwork'),
+                    mask: value('routeMask') || '255.255.255.0',
+                    gateway: value('routeGateway'),
+                    interface: value('routeInterface')
+                });
+                this.addLog(`Νέα διαδρομή στον ${router.name}: ${route.network}/${subnetMaskToCIDR(route.mask)} μέσω ${route.gateway}`, 'success');
+                this.updateDeviceInfo(router);
+            } catch (error) {
+                this.addLog(`Σφάλμα: ${error.message}`, 'error');
+            }
+        };
+    }
+
+    generateFirewallConfigHTML(firewall) {
+        const options = (labels, selected) => Object.entries(labels)
+            .map(([value, label]) => `<option value="${value}" ${value === selected ? 'selected' : ''}>${label}</option>`)
+            .join('');
+        const actions = { allow: 'Επιτρέπεται', deny: 'Απαγορεύεται' };
+        const directions = { any: 'Όλες', outbound: 'Εξερχόμενη (inside → outside)', inbound: 'Εισερχόμενη (outside → inside)' };
+        const protocols = { any: 'Όλα', icmp: 'ICMP (ping)', tcp: 'TCP', udp: 'UDP' };
+
+        const ports = FIREWALL_PORTS.map(port => {
+            const connectionId = Object.keys(firewall.connectionInterfaces || {}).find(id => firewall.connectionInterfaces[id] === port);
+            const connection = this.connectionManager.connections.find(c => c.id === connectionId);
+            const peer = connection && this.deviceManager.getDeviceById(connection.device1Id === firewall.id ? connection.device2Id : connection.device1Id);
+            return `
+                <div class="info-item">
+                    <strong class="text-tertiary">${port === 'inside' ? 'Inside (εσωτερικό)' : 'Outside (εξωτερικό)'}:</strong><br>
+                    <span>${peer ? peer.name : 'ελεύθερη'}</span>
+                </div>`;
+        }).join('');
+
+        const rules = firewall.firewall.rules.map((rule, index) => `
+            <div class="interface-item">
+                <div class="interface-item-content">
+                    <div class="interface-item-details">
+                        <div class="interface-info">${index + 1}. ${describeRule(rule)}</div>
+                    </div>
+                    <button class="btn btn-sm btn-secondary" data-rule-up="${index}" title="Μετακίνηση πάνω" ${index === 0 ? 'disabled' : ''}>
+                        <i class="fas fa-arrow-up"></i>
+                    </button>
+                    <button class="btn btn-sm btn-danger" data-rule-delete="${index}" title="Διαγραφή κανόνα">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            </div>
+        `).join('');
+
+        return `
+            <div class="config-panel">
+                <h4><i class="fas fa-shield-alt"></i> Firewall (transparent)</h4>
+                <div class="info-grid">${ports}</div>
+                <div class="form-group">
+                    <label for="deviceIp">IP διαχείρισης:</label>
+                    <input type="text" id="deviceIp" value="${firewall.ip}" placeholder="192.168.1.254">
+                </div>
+                <div class="form-group">
+                    <label for="deviceSubnet">Subnet Mask:</label>
+                    <input type="text" id="deviceSubnet" value="${firewall.subnetMask}" placeholder="255.255.255.0">
+                </div>
+                <div class="form-group">
+                    <label for="deviceGateway">Gateway:</label>
+                    <input type="text" id="deviceGateway" value="${firewall.gateway}" placeholder="192.168.1.1">
+                </div>
+                <button class="btn btn-success" id="updateDeviceBtn" style="width: 100%;">
+                    <i class="fas fa-save"></i> Ενημέρωση
+                </button>
+            </div>
+
+            <div class="config-panel">
+                <h4><i class="fas fa-list-ol"></i> Πολιτική και Κανόνες</h4>
+                <div class="form-group">
+                    <label for="fwPolicyOutbound">Εξερχόμενη κίνηση (χωρίς κανόνα):</label>
+                    <select id="fwPolicyOutbound">${options(actions, firewall.firewall.policy.outbound)}</select>
+                </div>
+                <div class="form-group">
+                    <label for="fwPolicyInbound">Εισερχόμενη κίνηση (χωρίς κανόνα):</label>
+                    <select id="fwPolicyInbound">${options(actions, firewall.firewall.policy.inbound)}</select>
+                </div>
+                <p class="text-muted">Οι κανόνες ελέγχονται με τη σειρά· ισχύει ο πρώτος που ταιριάζει. Οι απαντήσεις σε επιτρεπόμενη κίνηση περνούν πάντα.</p>
+                <div id="firewallRuleList">
+                    ${rules || '<p class="text-muted">Δεν υπάρχουν κανόνες.</p>'}
+                </div>
+                <div class="form-group">
+                    <label for="fwRuleAction">Ενέργεια:</label>
+                    <select id="fwRuleAction">${options(actions, 'allow')}</select>
+                </div>
+                <div class="form-group">
+                    <label for="fwRuleDirection">Κατεύθυνση:</label>
+                    <select id="fwRuleDirection">${options(directions, 'inbound')}</select>
+                </div>
+                <div class="form-group">
+                    <label for="fwRuleProtocol">Πρωτόκολλο:</label>
+                    <select id="fwRuleProtocol">${options(protocols, 'tcp')}</select>
+                </div>
+                <div class="form-group">
+                    <label for="fwRulePort">Θύρα (μόνο TCP/UDP, κενό = όλες):</label>
+                    <input type="text" id="fwRulePort" placeholder="80">
+                </div>
+                <div class="form-group">
+                    <label for="fwRuleSource">Πηγή (any, IP ή δίκτυο/CIDR):</label>
+                    <input type="text" id="fwRuleSource" placeholder="any">
+                </div>
+                <div class="form-group">
+                    <label for="fwRuleDestination">Προορισμός (any, IP ή δίκτυο/CIDR):</label>
+                    <input type="text" id="fwRuleDestination" placeholder="192.168.2.10">
+                </div>
+                <button class="btn btn-success" id="addFirewallRuleBtn" style="width: 100%;">
+                    <i class="fas fa-plus"></i> Προσθήκη κανόνα
+                </button>
+            </div>
+
+            <div class="config-panel">
+                <h4><i class="fas fa-vial"></i> Γρήγορες Δοκιμές</h4>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                    <button class="btn btn-primary" id="quickPingBtn">
+                        <i class="fas fa-satellite-dish"></i> Ping
+                    </button>
+                    <button class="btn btn-secondary" id="quickServiceBtn">
+                        <i class="fas fa-plug"></i> Υπηρεσία
+                    </button>
+                </div>
+            </div>
+        `;
+    }
+
+    addFirewallListeners(firewall) {
+        const refresh = (message, type = 'success') => {
+            this.addLog(message, type);
+            this.updateDeviceInfo(firewall);
+        };
+
+        // onclick/onchange: ίδιος λόγος με το addRoutingTableListeners
+        [['fwPolicyOutbound', 'outbound'], ['fwPolicyInbound', 'inbound']].forEach(([id, direction]) => {
+            const select = document.getElementById(id);
+            if (select) select.onchange = (e) => {
+                this.deviceManager.updateFirewallPolicy(firewall, direction, e.target.value);
+                refresh(`${firewall.name}: ${direction === 'outbound' ? 'εξερχόμενη' : 'εισερχόμενη'} κίνηση → ${e.target.value === 'allow' ? 'επιτρέπεται' : 'απαγορεύεται'}`);
+            };
+        });
+
+        const addButton = document.getElementById('addFirewallRuleBtn');
+        if (addButton) addButton.onclick = () => {
+            const value = id => document.getElementById(id)?.value ?? '';
+            try {
+                const rule = this.deviceManager.addFirewallRule(firewall, {
+                    action: value('fwRuleAction'),
+                    direction: value('fwRuleDirection'),
+                    protocol: value('fwRuleProtocol'),
+                    port: value('fwRulePort'),
+                    source: value('fwRuleSource'),
+                    destination: value('fwRuleDestination')
+                });
+                refresh(`${firewall.name}: νέος κανόνας: ${describeRule(rule)}`);
+            } catch (error) {
+                this.addLog(`Σφάλμα κανόνα: ${error.message}`, 'error');
+            }
+        };
+
+        const list = document.getElementById('firewallRuleList');
+        if (list) list.onclick = (e) => {
+            const up = e.target.closest('[data-rule-up]');
+            const remove = e.target.closest('[data-rule-delete]');
+            if (up) {
+                this.deviceManager.moveFirewallRuleUp(firewall, Number(up.dataset.ruleUp));
+                refresh(`${firewall.name}: άλλαξε η σειρά των κανόνων`, 'info');
+            } else if (remove) {
+                const rule = this.deviceManager.removeFirewallRule(firewall, Number(remove.dataset.ruleDelete));
+                refresh(`${firewall.name}: διαγράφηκε ο κανόνας: ${describeRule(rule)}`, 'info');
+            }
+        };
+    }
+
+    testServiceFromDevice(device) {
+        if (typeof window.simulator !== 'undefined') {
+            window.simulator.testServiceFromDevice(device);
         } else {
             this.addLog('Το σύστημα δεν είναι έτοιμο ακόμα.', 'warning');
         }

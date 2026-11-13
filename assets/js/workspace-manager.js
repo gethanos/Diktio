@@ -91,61 +91,46 @@ class WorkspaceManager {
     }
 
     // Export current workspace
-    exportWorkspace(name = "My Network") {
+    exportWorkspace(name = 'My Network') {
         const devices = this.simulator.deviceManager.devices || [];
         const connections = this.simulator.connectionManager.connections || [];
-        
+
         return {
             metadata: {
-                name: name,
+                name,
                 exportDate: new Date().toISOString(),
-                version: "2.0",
-                app: "Network Simulator",
+                version: '2.0',
+                app: 'Network Simulator',
                 deviceCount: devices.length,
                 connectionCount: connections.length
             },
-            devices: devices.map(device => {
-                // Create a clean device object without circular references
-                const deviceData = {
-                    id: device.id,
-                    type: device.type,
-                    name: device.name,
-                    x: device.x,
-                    y: device.y,
-                    color: this.getColorForDeviceType(device.type),
-                    // Network properties
-                    ip: device.ip,
-                    subnetMask: device.subnetMask,
-                    gateway: device.gateway,
-                    dns: device.dns,
-                    domainName: device.domainName,
-                    status: device.status,
-                    // Router specific
-                    interfaces: device.interfaces ? {...device.interfaces} : undefined,
-                    routingTable: device.routingTable ? [...device.routingTable] : undefined,
-                    // ΚΡΙΤΙΚΟ: Αποθήκευση connectionInterfaces για routers
-                    connectionInterfaces: device.connectionInterfaces ? {...device.connectionInterfaces} : {},
-                    // Other
-                    connections: device.connections ? [...device.connections] : []
-                };
-                
-                return deviceData;
-            }),
-            connections: connections.map(conn => {
-                return {
-                    id: conn.id,
-                    device1Id: conn.device1Id,
-                    device2Id: conn.device2Id,
-                    port1: conn.port1,
-                    port2: conn.port2,
-                    status: conn.status,
-                    // ΚΡΙΤΙΚΟ: Αποθήκευση interface types αν υπάρχουν
-                    interfaceType1: conn.interfaceType1,
-                    interfaceType2: conn.interfaceType2
-                };
-            }),
-            dnsRecords: this.simulator.dnsManager.globalDnsRecords ? 
-                {...this.simulator.dnsManager.globalDnsRecords} : {}
+            devices: devices.map(device => ({
+                id: device.id,
+                type: device.type,
+                name: device.name,
+                x: device.x,
+                y: device.y,
+                color: this.getColorForDeviceType(device.type),
+                ip: device.ip,
+                subnetMask: device.subnetMask,
+                gateway: device.gateway,
+                dns: device.dns,
+                domainName: device.domainName,
+                status: device.status,
+                interfaces: device.interfaces,
+                routingTable: device.routingTable,
+                connectionInterfaces: device.connectionInterfaces || {},
+                firewall: device.firewall,
+                connections: device.connections || []
+            })),
+            connections: connections.map(conn => ({
+                id: conn.id,
+                device1Id: conn.device1Id,
+                device2Id: conn.device2Id,
+                interface1: conn.interface1,
+                interface2: conn.interface2
+            })),
+            dnsRecords: { ...(this.simulator.dnsManager.globalDnsRecords || {}) }
         };
     }
 
@@ -184,107 +169,29 @@ class WorkspaceManager {
         URL.revokeObjectURL(url);
     }
 
-    // Load workspace from file
+    // Επιστρέφει true αν φορτώθηκε, false αν ακυρώθηκε ή απέτυχε
     async loadFromFile(event) {
-        const file = event.target.files[0];
-        if (!file) return;
+        const file = event.target.files?.[0];
+        if (event.target.value !== undefined) event.target.value = '';
+        if (!file) return false;
 
-        const reader = new FileReader();
+        try {
+            const { data, warnings } = this.validateWorkspace(JSON.parse(await this.readFileAsText(file)));
 
-        reader.onload = async (e) => {
-            try {
-                const importData = JSON.parse(e.target.result);
-                
-                if (!importData.devices) {
-                    throw new Error('Invalid workspace file: No devices found');
-                }
-
-                // Check version compatibility
-                if (importData.metadata && importData.metadata.version) {
-                    const savedVersion = importData.metadata.version;
-                    const currentVersion = "2.0";
-                    
-                    if (savedVersion !== currentVersion) {
-                        console.warn(`Version mismatch: Saved ${savedVersion}, Current ${currentVersion}`);
-                        if (!confirm(`This workspace was saved with version ${savedVersion} (current: ${currentVersion}).\n\nSome features may not work correctly. Continue loading?`)) {
-                            return;
-                        }
-                    }
-                }
-
-                // Ask for confirmation
-                if (!confirm('Load this workspace? Current work will be lost.')) {
-                    return;
-                }
-
-                // Reset UI manager modes BEFORE clearing workspace
-                this.resetUIModes();
-                
-                // Close properties panel before loading
-                this.closePropertiesPanel();
-                
-                // Clear current workspace
-                this.simulator.clearWorkspace();
-                
-                // Give time for cleanup
-                await new Promise(resolve => setTimeout(resolve, 100));
-                
-                // 1. RESTORE DEVICES EXACTLY AS IN JSON
-                const restoredDevices = [];
-                for (const deviceData of importData.devices) {
-                    const device = await this.restoreDevice(deviceData);
-                    if (device) {
-                        restoredDevices.push(device);
-                    }
-                }
-
-                // 2. RESTORE CONNECTIONS SIMPLY - JUST ADD TO MANAGER
-                if (importData.connections && importData.connections.length > 0) {
-                    await this.simpleRestoreConnections(importData);
-                }
-                
-                // 3. Restore DNS records
-                if (importData.dnsRecords) {
-                    Object.assign(this.simulator.dnsManager.globalDnsRecords, importData.dnsRecords);
-                }
-                
-                // 4. FINAL UPDATE
-                setTimeout(() => {
-                    if (this.simulator.connectionManager.updateAllConnections) {
-                        this.simulator.connectionManager.updateAllConnections(
-                            this.simulator.deviceManager.devices
-                        );
-                    }
-                }, 500);
-                
-                // IMPORTANT: Force update UI manager's device cache
-                if (this.simulator.uiManager.updateDeviceInfo) {
-                    this.simulator.uiManager.updateDeviceInfo(null);
-                }
-                
-                // Ensure properties panel stays closed
-                this.closePropertiesPanel();
-                
-                // Update network stats
-                if (this.simulator.uiManager.updateNetworkStats) {
-                    this.simulator.uiManager.updateNetworkStats();
-                }
-                
-                console.log(`[WORKSPACE] Successfully loaded ${restoredDevices.length} devices, ${importData.connections?.length || 0} connections`);
-                this.showNotification(`"${importData.metadata?.name || 'Workspace'}" loaded successfully!`, 'success');
-                
-            } catch (error) {
-                console.error('Load error:', error);
-                this.showNotification(`Error loading: ${error.message}`, 'error');
+            const savedVersion = data.metadata?.version;
+            if (savedVersion && savedVersion !== '2.0' &&
+                !confirm(`This workspace was saved with version ${savedVersion} (current: 2.0).\n\nSome features may not work correctly. Continue loading?`)) {
+                return false;
             }
-        };
+            if (!confirm('Load this workspace? Current work will be lost.')) return false;
 
-        reader.onerror = () => {
-            this.showNotification('Error reading file', 'error');
-        };
-
-        reader.readAsText(file);
-        event.target.value = '';
+            this.applyWorkspace(data, warnings);
+            this.showNotification(`"${data.metadata?.name || 'Workspace'}" loaded successfully!`, warnings.length ? 'warning' : 'success');
+            return true;
+        } catch (error) {
+            this.showNotification(`Error loading: ${error.message}`, 'error');
+            return false;
+        }
     }
 
     // Reset UI modes before loading
@@ -318,169 +225,169 @@ class WorkspaceManager {
         }
     }
 
-    // SIMPLE: Restore a single device
-    async restoreDevice(deviceData) {
-        return new Promise((resolve) => {
-            setTimeout(() => {
-                try {
-                    // Create device using existing UI method
-                    const color = deviceData.color || this.getColorForDeviceType(deviceData.type);
-                    const device = this.simulator.uiManager.addDeviceToWorkspace(
-                        deviceData.type, 
-                        color
-                    );
-                    
-                    if (device) {
-                        // Set position
-                        device.x = deviceData.x || 0;
-                        device.y = deviceData.y || 0;
-                        
-                        if (device.element) {
-                            device.element.style.left = `${device.x}px`;
-                            device.element.style.top = `${device.y}px`;
-                            
-                            // Apply the saved color to the element
-                            if (color && device.element.style) {
-                                device.element.style.borderTopColor = color;
-                                device.element.style.borderColor = color;
-                            }
-                        }
-                        
-                        // RESTORE ALL PROPERTIES EXACTLY AS IN JSON
-                        device.id = deviceData.id || device.id;
-                        device.name = deviceData.name || device.name;
-                        
-                        // Network properties
-                        device.ip = deviceData.ip || device.ip;
-                        device.subnetMask = deviceData.subnetMask || device.subnetMask;
-                        device.gateway = deviceData.gateway || device.gateway;
-                        device.dns = deviceData.dns || device.dns;
-                        device.domainName = deviceData.domainName || device.domainName;
-                        device.status = deviceData.status || device.status;
-                        
-                        // Router specific
-                        if (device.type === 'router') {
-                            if (deviceData.interfaces) {
-                                device.interfaces = deviceData.interfaces;
-                            }
-                            
-                            // ΚΡΙΤΙΚΟ: Restore connectionInterfaces exactly
-                            if (deviceData.connectionInterfaces) {
-                                device.connectionInterfaces = { ...deviceData.connectionInterfaces };
-                            }
-                        }
-                        
-                        if (deviceData.routingTable) device.routingTable = deviceData.routingTable;
-                        
-                        // Restore connections array EXACTLY
-                        device.connections = deviceData.connections ? [...deviceData.connections] : [];
-                        
-                        // Force update IP display
-                        this.updateDeviceDisplay(device, deviceData);
-                        
-                        // Ensure device is not selected
-                        if (device.element) {
-                            device.element.classList.remove('selected');
-                        }
-                        
-                        console.log(`[WORKSPACE] Restored device: ${device.name} with ${device.connections.length} connections`);
-                        resolve(device);
-                    } else {
-                        console.error('[WORKSPACE] Failed to create device:', deviceData.type);
-                        resolve(null);
-                    }
-                } catch (error) {
-                    console.error('Error restoring device:', error, deviceData);
-                    resolve(null);
-                }
-            }, 50);
+    // Συγχρονη επαναφορά με το αποθηκευμένο id. Ο μετρητής ρυθμίζεται ώστε
+    // η επόμενη νέα συσκευή να μην πάρει id που ήδη υπάρχει.
+    restoreDevice(deviceData) {
+        const { deviceManager, uiManager } = this.simulator;
+        const workspace = uiManager.workspace || document.getElementById('workspace');
+        const color = deviceData.color || this.getColorForDeviceType(deviceData.type);
+        const device = deviceManager.addDevice(deviceData.type, color, deviceData.x || 0, deviceData.y || 0, workspace);
+
+        Object.assign(device, {
+            id: deviceData.id,
+            name: deviceData.name ?? device.name,
+            status: deviceData.status ?? device.status,
+            routingTable: deviceData.routingTable ?? device.routingTable,
+            connections: [...(deviceData.connections || [])],
+            connectionInterfaces: { ...(deviceData.connectionInterfaces || {}) }
         });
+        if (deviceData.firewall) device.firewall = structuredClone(deviceData.firewall);
+        if (device.type === 'router') {
+            device.interfaces = structuredClone(deviceData.interfaces);
+        } else {
+            ['ip', 'subnetMask', 'gateway', 'domainName'].forEach(key => {
+                if (deviceData[key] !== undefined) device[key] = deviceData[key];
+            });
+            if (Array.isArray(deviceData.dns)) device.dns = [...deviceData.dns];
+        }
+
+        device.element.id = device.id;
+        device.element.classList.remove('selected');
+        deviceManager.selectedDevice = null;
+        this.updateDeviceDisplay(device);
+
+        const numericId = Number(device.id.match(/^device-(\d+)$/)?.[1]);
+        if (numericId >= deviceManager.deviceCounter) deviceManager.deviceCounter = numericId + 1;
+        return device;
     }
 
     // SIMPLE: Just update device display
-    updateDeviceDisplay(device, deviceData) {
-        if (!device.element) return;
-        
-        console.log(`[WORKSPACE] Updating display for ${device.name}`);
-        
-        // Update IP display
-        const ipElement = device.element.querySelector('.device-ip');
+    updateDeviceDisplay(device) {
+        const ipElement = device.element?.querySelector('.device-ip');
         if (ipElement) {
-            if (device.type === 'router' && deviceData.interfaces) {
-                // Special handling for router with multiple interfaces
-                const wanIP = deviceData.interfaces.wan?.ip || 'N/A';
-                const lanIP = deviceData.interfaces.lan?.ip || 'N/A';
-                ipElement.innerHTML = `WAN: ${wanIP}<br>LAN: ${lanIP}`;
+            if (device.type === 'router') {
+                const { wan, lan, lan2 } = device.interfaces;
+                ipElement.innerHTML = `WAN: ${wan.ip}<br>LAN: ${lan.ip}<br>LAN2: ${lan2.ip}${lan2.enabled === false ? ' (ανενεργό)' : ''}`;
             } else {
-                ipElement.textContent = deviceData.ip || 'N/A';
+                ipElement.textContent = device.ip || 'N/A';
             }
         }
-        
-        // Update name display if exists
-        const nameElement = device.element.querySelector('.device-name');
-        if (nameElement && deviceData.name) {
-            nameElement.textContent = deviceData.name;
-        }
+        const nameElement = device.element?.querySelector('.device-name');
+        if (nameElement) nameElement.textContent = device.name;
     }
 
-    // SIMPLE: Just add connections to manager without creating new ones
-    async simpleRestoreConnections(importData) {
-        return new Promise((resolve) => {
-            setTimeout(() => {
-                try {
-                    console.log('[WORKSPACE] Adding connections to manager...');
-                    
-                    let addedCount = 0;
-                    let skippedCount = 0;
-                    
-                    importData.connections.forEach(connData => {
-                        try {
-                            // Check if this connection already exists
-                            const existingConn = this.simulator.connectionManager.connections.find(
-                                conn => conn.id === connData.id
-                            );
-                            
-                            if (existingConn) {
-                                console.log(`[WORKSPACE] Connection already exists: ${connData.id}`);
-                                skippedCount++;
-                                return;
-                            }
-                            
-                            // Just add the connection object as-is
-                            this.simulator.connectionManager.connections.push({
-                                id: connData.id,
-                                device1Id: connData.device1Id,
-                                device2Id: connData.device2Id,
-                                port1: connData.port1,
-                                port2: connData.port2,
-                                status: connData.status || 'connected',
-                                interfaceType1: connData.interfaceType1,
-                                interfaceType2: connData.interfaceType2
-                            });
-                            
-                            addedCount++;
-                            console.log(`[WORKSPACE] Added connection: ${connData.id}`);
-                            
-                        } catch (error) {
-                            console.warn(`[WORKSPACE] Failed to add connection ${connData.id}:`, error);
-                            skippedCount++;
-                        }
-                    });
-                    
-                    console.log(`[WORKSPACE] Connections added: ${addedCount}, skipped: ${skippedCount}`);
-                    
-                    // Update visual connections
-                    if (this.simulator.connectionManager.updateConnectionsVisual) {
-                        this.simulator.connectionManager.updateConnectionsVisual();
-                    }
-                    
-                    resolve();
-                } catch (error) {
-                    console.error('[WORKSPACE] Error in simpleRestoreConnections:', error);
-                    resolve();
-                }
-            }, 100);
+    // Οι διεπαφές routers/firewalls προκύπτουν από τα αποθηκευμένα connectionInterfaces. Για αρχεία
+    // χωρίς αυτά συμπληρώνονται: router με determineInterfaceForConnection, firewall με την πρώτη ελεύθερη θύρα.
+    simpleRestoreConnections(importData) {
+        const { connectionManager, deviceManager } = this.simulator;
+        (importData.connections || []).forEach(connData => {
+            if (connectionManager.connections.some(conn => conn.id === connData.id)) return;
+            const connection = {
+                id: connData.id,
+                device1Id: connData.device1Id,
+                device2Id: connData.device2Id,
+                type: 'direct',
+                canCommunicate: true
+            };
+            ['device1Id', 'device2Id'].forEach((key, index) => {
+                const device = deviceManager.getDeviceById(connData[key]);
+                if (device?.type !== 'router' && device?.type !== 'firewall') return;
+                const iface = connData[`interface${index + 1}`]
+                    ?? device.connectionInterfaces[connData.id]
+                    ?? (device.type === 'router'
+                        ? connectionManager.determineInterfaceForConnection(device, connection)
+                        : ['inside', 'outside'].find(port => !Object.values(device.connectionInterfaces).includes(port)));
+                if (!iface) return;
+                device.connectionInterfaces[connData.id] = iface;
+                connection[`interface${index + 1}`] = iface;
+            });
+            connectionManager.connections.push(connection);
         });
+        connectionManager.updateConnectionsVisual();
+    }
+
+    readFileAsText(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = () => reject(new Error('Error reading file'));
+            reader.readAsText(file);
+        });
+    }
+
+    // Ολόκληρος ο έλεγχος γίνεται ΠΡΙΝ καθαριστεί το τρέχον workspace.
+    // Σφάλματα συσκευών ακυρώνουν τη φόρτωση. Συνδέσεις προς ανύπαρκτες συσκευές
+    // (υπάρχουν στα Simple_Lan.json, predefined-lan.json) αφαιρούνται με προειδοποίηση.
+    // Επιστρέφει { data, warnings } με καθαρισμένα δεδομένα, χωρίς να αλλάζει το αρχικό.
+    validateWorkspace(data) {
+        if (!data || !Array.isArray(data.devices)) {
+            throw new Error('Μη έγκυρο αρχείο: λείπει ο πίνακας "devices"');
+        }
+        const knownTypes = Object.keys(window.CONFIG?.DEVICE_TYPES || {});
+        const ids = new Set();
+
+        data.devices.forEach((device, index) => {
+            if (typeof device.id !== 'string' || ids.has(device.id)) {
+                throw new Error(`Μη έγκυρο αρχείο: η συσκευή #${index + 1} δεν έχει id ή το id της επαναλαμβάνεται`);
+            }
+            ids.add(device.id);
+            if (!knownTypes.includes(device.type)) {
+                throw new Error(`Μη έγκυρο αρχείο: άγνωστος τύπος συσκευής "${device.type}"`);
+            }
+            if (device.type === 'router' && !(device.interfaces?.wan && (device.interfaces.lan || device.interfaces.lan1))) {
+                throw new Error(`Μη έγκυρο αρχείο: ο router "${device.name || device.id}" δεν έχει διεπαφές WAN/LAN`);
+            }
+        });
+
+        const warnings = [];
+        const connectionIds = new Set();
+        const connections = (data.connections || []).filter(conn => {
+            if (connectionIds.has(conn.id)) throw new Error(`Μη έγκυρο αρχείο: διπλότυπο id σύνδεσης ${conn.id}`);
+            connectionIds.add(conn.id);
+            if (ids.has(conn.device1Id) && ids.has(conn.device2Id)) return true;
+            warnings.push(`Η σύνδεση ${conn.id} αναφέρεται σε συσκευή που δεν υπάρχει και παραλείφθηκε`);
+            return false;
+        });
+        const validIds = new Set(connections.map(conn => conn.id));
+        const devices = data.devices.map(device => ({
+            ...device,
+            connections: (device.connections || []).filter(id => validIds.has(id)),
+            connectionInterfaces: Object.fromEntries(
+                Object.entries(device.connectionInterfaces || {}).filter(([id]) => validIds.has(id)))
+        }));
+
+        return { data: { ...data, devices, connections }, warnings };
+    }
+
+    // Παλιά αρχεία: interfaces.lan1 → lan, απουσία lan2
+    normalizeDeviceData(deviceData) {
+        if (deviceData.type !== 'router') return deviceData;
+        const { lan1, ...interfaces } = deviceData.interfaces;
+        interfaces.lan ??= lan1;
+        interfaces.lan2 ??= { ip: 'N/A', subnetMask: '255.255.255.0', gateway: '0.0.0.0', dns: [], enabled: false };
+        return { ...deviceData, interfaces };
+    }
+
+    // Κοινή διαδρομή επαναφοράς για αρχείο, πρότυπα και main.js createPredefinedWan/Lan:
+    //   const { data, warnings } = window.workspaceManager.validateWorkspace(jsonData);
+    //   window.workspaceManager.applyWorkspace(data, warnings);
+    applyWorkspace(data, warnings = []) {
+        const { deviceManager, connectionManager, dnsManager, uiManager } = this.simulator;
+
+        this.resetUIModes();
+        this.closePropertiesPanel();
+        this.simulator.clearWorkspace();
+
+        data.devices.map(d => this.normalizeDeviceData(d)).forEach(d => this.restoreDevice(d));
+        this.simpleRestoreConnections(data);
+        Object.assign(dnsManager.globalDnsRecords, data.dnsRecords || {});
+
+        connectionManager.updateAllConnections(deviceManager.devices);
+        deviceManager.refreshDuplicateIPWarnings?.();
+        this.closePropertiesPanel();
+        uiManager.updateDeviceInfo?.(null);
+        uiManager.updateNetworkStats?.();
+        warnings.forEach(warning => uiManager.addLog?.(warning, 'warning'));
     }
 
     triggerLoad() {
