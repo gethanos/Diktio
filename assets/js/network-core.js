@@ -21,274 +21,165 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-// Βασικές συναρτήσεις δικτύου - ΔΙΟΡΘΩΜΕΝΕΣ ΚΑΙ ΕΚΤΕΤΑΜΕΝΕΣ
+// Βασικές συναρτήσεις δικτύου (IPv4)
 
-// Μετατροπή IP σε integer
+const IPV4_PATTERN = /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/;
+
+// Έλεγχος εγκυρότητας IP (αυστηρά τέσσερα δεκαδικά octets 0-255)
+function isValidIP(ip) {
+    return typeof ip === 'string' && IPV4_PATTERN.test(ip);
+}
+
+// Μετατροπή IP σε unsigned 32-bit integer (0 για μη έγκυρη τιμή)
 function ipToInt(ip) {
-    if (!ip || ip === 'N/A') return 0;
-    return ip.split('.').reduce((acc, octet) => (acc << 8) + parseInt(octet, 10), 0) >>> 0;
+    if (!isValidIP(ip)) return 0;
+    return ip.split('.').reduce((acc, octet) => ((acc << 8) | Number(octet)) >>> 0, 0);
 }
 
 // Μετατροπή integer σε IP
 function intToIp(int) {
-    return [(int >>> 24) & 255, (int >>> 16) & 255, (int >>> 8) & 255, int & 255].join('.');
+    return [24, 16, 8, 0].map(shift => (int >>> shift) & 255).join('.');
 }
 
-// Υπολογισμός διεύθυνσης δικτύου - ΔΙΟΡΘΩΜΕΝΗ
-function getNetworkAddress(ip, subnetMask = '255.255.255.0') {
-    if (!ip || ip === 'N/A') return null;
-    const ipInt = ipToInt(ip);
-    const maskInt = ipToInt(subnetMask);
-    const networkInt = ipInt & maskInt;
-    return intToIp(networkInt);
+// Μάσκα: συνεχόμενα 1 από αριστερά. Η 0.0.0.0 (/0) είναι έγκυρη μόνο για routes.
+function isValidSubnetMask(subnetMask, { allowZero = false } = {}) {
+    if (!isValidIP(subnetMask)) return false;
+    const mask = ipToInt(subnetMask);
+    if (mask === 0) return allowZero;
+    const inverted = ~mask >>> 0;
+    return (inverted & (inverted + 1)) === 0;
 }
 
-// Έλεγχος αν δύο IP είναι στο ίδιο δίκτυο - ΔΙΟΡΘΩΜΕΝΗ
-function areInSameNetwork(ip1, ip2, subnetMask1 = '255.255.255.0', subnetMask2 = '255.255.255.0') {
-    console.log(`[NETWORK CORE] Checking: ${ip1}/${subnetMask1} vs ${ip2}/${subnetMask2}`);
-    
-    if (!ip1 || !ip2 || ip1 === 'N/A' || ip2 === 'N/A') {
-        console.log(`[NETWORK CORE] Invalid IPs`);
-        return false;
-    }
-    
-    if (subnetMask1 === '0.0.0.0' || subnetMask2 === '0.0.0.0') {
-        console.log(`[NETWORK CORE] Invalid subnet masks`);
-        return false;
-    }
-    
-    // Χρησιμοποιούμε την ίδια μάσκα για και τις δύο IP
-    const effectiveMask = subnetMask1;
-    
-    const network1 = getNetworkAddress(ip1, effectiveMask);
-    const network2 = getNetworkAddress(ip2, effectiveMask);
-    
-    console.log(`[NETWORK CORE] ${ip1} -> ${network1}`);
-    console.log(`[NETWORK CORE] ${ip2} -> ${network2}`);
-    console.log(`[NETWORK CORE] Same? ${network1 === network2}`);
-    
-    return network1 === network2;
-}
-
-// Έλεγχος εγκυρότητας IP
-function isValidIP(ip) {
-    if (!ip || ip === 'N/A') return false;
-    const ipPattern = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
-    if (!ipPattern.test(ip)) return false;
-    
-    const parts = ip.split('.');
-    return parts.every(part => {
-        const num = parseInt(part, 10);
-        return num >= 0 && num <= 255;
-    });
-}
-
-// Έλεγχος εγκυρότητας μάσκας υποδικτύου
-function isValidSubnetMask(subnetMask) {
-    if (!subnetMask || subnetMask === '0.0.0.0') return false;
-    
-    const validMasks = [
-        '255.255.255.0', '255.255.0.0', '255.0.0.0',
-        '255.255.255.128', '255.255.255.192', '255.255.255.224',
-        '255.255.255.240', '255.255.255.248', '255.255.255.252',
-        '255.255.255.254', '255.255.255.255'
-    ];
-    
-    if (validMasks.includes(subnetMask)) return true;
-    
-    const maskInt = ipToInt(subnetMask);
-    if (maskInt === 0) return false;
-    
-    let foundZero = false;
-    for (let i = 31; i >= 0; i--) {
-        const bit = (maskInt >> i) & 1;
-        if (bit === 0) {
-            foundZero = true;
-        } else if (foundZero) {
-            return false;
-        }
-    }
-    
-    return true;
-}
-
-// Υπολογισμός διαθέσιμων διευθύνσεων σε δίκτυο
-function getNetworkInfo(ip, subnetMask) {
-    const network = getNetworkAddress(ip, subnetMask);
-    const networkInt = ipToInt(network);
-    const maskInt = ipToInt(subnetMask);
-    
-    // Υπολογισμός broadcast address
-    const wildcard = ~maskInt >>> 0;
-    const broadcastInt = networkInt | wildcard;
-    const broadcast = intToIp(broadcastInt);
-    
-    // Υπολογισμός πρώτης και τελευταίας χρήσιμης διεύθυνσης
-    const firstUsableInt = networkInt + 1;
-    const lastUsableInt = broadcastInt - 1;
-    
-    return {
-        network: network,
-        broadcast: broadcast,
-        firstUsable: intToIp(firstUsableInt),
-        lastUsable: intToIp(lastUsableInt),
-        usableHosts: lastUsableInt - firstUsableInt + 1
-    };
-}
-
-// Δημιουργία τυχαίας IP εντός δικτύου
-function generateRandomIP(network, subnetMask) {
-    const netInfo = getNetworkInfo(network, subnetMask);
-    const firstInt = ipToInt(netInfo.firstUsable);
-    const lastInt = ipToInt(netInfo.lastUsable);
-    
-    if (firstInt >= lastInt) return network;
-    
-    const randomInt = Math.floor(Math.random() * (lastInt - firstInt + 1)) + firstInt;
-    return intToIp(randomInt);
-}
-
-// Εξαγωγή CIDR από μάσκα υποδικτύου
+// Μάσκα → μήκος prefix (CIDR)
 function subnetMaskToCIDR(subnetMask) {
-    const maskInt = ipToInt(subnetMask);
+    let mask = ipToInt(subnetMask);
     let cidr = 0;
-    
-    for (let i = 31; i >= 0; i--) {
-        if ((maskInt >> i) & 1) {
-            cidr++;
-        } else {
-            break;
-        }
+    while (mask & 0x80000000) {
+        cidr++;
+        mask = (mask << 1) >>> 0;
     }
-    
     return cidr;
 }
 
-// Έλεγχος αν το IP βρίσκεται εντός δικτύου
+// Διεύθυνση δικτύου
+function getNetworkAddress(ip, subnetMask = '255.255.255.0') {
+    if (!isValidIP(ip)) return null;
+    return intToIp((ipToInt(ip) & ipToInt(subnetMask)) >>> 0);
+}
+
+// Το targetIP ανήκει στο δίκτυο της διεπαφής ifaceIP/ifaceMask;
+// Αυτή είναι η απόφαση που παίρνει ένας host πριν στείλει: ARP (on-link) ή gateway.
+function isOnLink(targetIP, ifaceIP, ifaceMask) {
+    if (!isValidIP(targetIP) || !isValidIP(ifaceIP) || !isValidSubnetMask(ifaceMask)) return false;
+    const mask = ipToInt(ifaceMask);
+    return ((ipToInt(targetIP) & mask) >>> 0) === ((ipToInt(ifaceIP) & mask) >>> 0);
+}
+
+// Δύο διευθύνσεις είναι στο ίδιο δίκτυο μόνο αν η καθεμία θεωρεί την άλλη on-link
+// με τη δική της μάσκα. Η σχέση είναι συμμετρική, ανεξάρτητα από τη σειρά ορισμάτων.
+function areInSameNetwork(ip1, ip2, subnetMask1 = '255.255.255.0', subnetMask2 = '255.255.255.0') {
+    return isOnLink(ip2, ip1, subnetMask1) && isOnLink(ip1, ip2, subnetMask2);
+}
+
 function isIPInNetwork(ip, network, subnetMask) {
-    const ipNetwork = getNetworkAddress(ip, subnetMask);
-    return ipNetwork === network;
+    return isOnLink(ip, network, subnetMask);
 }
 
-// Δημιουργία τυχαίας μάσκας υποδικτύου
-function generateRandomSubnetMask() {
-    const masks = [
-        '255.255.255.0',
-        '255.255.0.0',
-        '255.0.0.0',
-        '255.255.255.128',
-        '255.255.255.192',
-        '255.255.255.224',
-        '255.255.255.240',
-        '255.255.255.248'
-    ];
-    
-    return masks[Math.floor(Math.random() * masks.length)];
+// Πληροφορίες δικτύου (RFC 3021: τα /31 έχουν 2 χρήσιμες διευθύνσεις, τα /32 μία)
+function getNetworkInfo(ip, subnetMask) {
+    if (!isValidIP(ip) || !isValidSubnetMask(subnetMask)) return null;
+    const mask = ipToInt(subnetMask);
+    const networkInt = (ipToInt(ip) & mask) >>> 0;
+    const broadcastInt = (networkInt | ~mask) >>> 0;
+    const prefix = subnetMaskToCIDR(subnetMask);
+    const [firstInt, lastInt] = prefix >= 31
+        ? [networkInt, broadcastInt]
+        : [networkInt + 1, broadcastInt - 1];
+
+    return {
+        network: intToIp(networkInt),
+        broadcast: intToIp(broadcastInt),
+        firstUsable: intToIp(firstInt),
+        lastUsable: intToIp(lastInt),
+        usableHosts: lastInt - firstInt + 1
+    };
 }
 
-// ΝΕΕΣ ΣΥΝΑΡΤΗΣΕΙΣ - Προστέθηκαν από τη δεύτερη έκδοση
-
-// Έλεγχος αν η IP είναι private
-function isPrivateIP(ip) {
-    if (!ip || ip === 'N/A') return false;
-    
-    const ipInt = ipToInt(ip);
-    
-    // 10.0.0.0/8
-    if (ipInt >= ipToInt('10.0.0.0') && ipInt <= ipToInt('10.255.255.255')) {
-        return true;
-    }
-    
-    // 172.16.0.0/12
-    if (ipInt >= ipToInt('172.16.0.0') && ipInt <= ipToInt('172.31.255.255')) {
-        return true;
-    }
-    
-    // 192.168.0.0/16
-    if (ipInt >= ipToInt('192.168.0.0') && ipInt <= ipToInt('192.168.255.255')) {
-        return true;
-    }
-    
-    // 127.0.0.0/8 (Loopback)
-    if (ipInt >= ipToInt('127.0.0.0') && ipInt <= ipToInt('127.255.255.255')) {
-        return true;
-    }
-    
-    // 169.254.0.0/16 (Link-local)
-    if (ipInt >= ipToInt('169.254.0.0') && ipInt <= ipToInt('169.254.255.255')) {
-        return true;
-    }
-    
-    return false;
+// Μπορεί η ip να δοθεί σε host; (όχι διεύθυνση δικτύου ή broadcast)
+function isUsableHostAddress(ip, subnetMask) {
+    const info = getNetworkInfo(ip, subnetMask);
+    if (!info) return false;
+    const value = ipToInt(ip);
+    return value >= ipToInt(info.firstUsable) && value <= ipToInt(info.lastUsable);
 }
 
-// Βρίσκει ελεύθερη διεύθυνση IP
-function getAvailableIP(baseIP, subnetMask, usedIPs = []) {
-    if (!isValidIP(baseIP) || !isValidSubnetMask(subnetMask)) {
-        return null;
-    }
-    
-    const netInfo = getNetworkInfo(baseIP, subnetMask);
-    const firstInt = ipToInt(netInfo.firstUsable);
-    const lastInt = ipToInt(netInfo.lastUsable);
-    
-    for (let ipInt = firstInt; ipInt <= lastInt; ipInt++) {
-        const potentialIP = intToIp(ipInt);
-        
-        if (!usedIPs.includes(potentialIP)) {
-            return potentialIP;
-        }
-    }
-    
-    return null;
-}
-
-// Λήψη επόμενης διαθέσιμης IP
+// Ελεύθερη διεύθυνση host στο δίκτυο, ξεκινώντας μετά το startIP (κυκλικά)
 function getNextAvailableIP(startIP, subnetMask, usedIPs = []) {
-    if (!isValidIP(startIP) || !isValidSubnetMask(subnetMask)) {
-        return null;
+    const info = getNetworkInfo(startIP, subnetMask);
+    if (!info) return null;
+    const used = new Set(usedIPs);
+    const first = ipToInt(info.firstUsable);
+    const size = info.usableHosts;
+    const offset = Math.max(0, ipToInt(startIP) - first + 1);
+
+    for (let i = 0; i < size; i++) {
+        const candidate = intToIp(first + ((offset + i) % size));
+        if (!used.has(candidate)) return candidate;
     }
-    
-    const startInt = ipToInt(startIP);
-    const netInfo = getNetworkInfo(startIP, subnetMask);
-    const firstInt = ipToInt(netInfo.firstUsable);
-    const lastInt = ipToInt(netInfo.lastUsable);
-    
-    // Ξεκινάμε από την επόμενη IP από τη startIP
-    for (let ipInt = startInt + 1; ipInt <= lastInt; ipInt++) {
-        const potentialIP = intToIp(ipInt);
-        
-        if (!usedIPs.includes(potentialIP)) {
-            return potentialIP;
-        }
-    }
-    
-    // Αν δεν βρει από εκεί και μετά, δοκιμάζει από την αρχή
-    for (let ipInt = firstInt; ipInt < startInt; ipInt++) {
-        const potentialIP = intToIp(ipInt);
-        
-        if (!usedIPs.includes(potentialIP)) {
-            return potentialIP;
-        }
-    }
-    
     return null;
 }
 
-// Έκδοση όλων των συναρτήσεων
+// Πρώτη ελεύθερη διεύθυνση host στο δίκτυο
+function getAvailableIP(baseIP, subnetMask, usedIPs = []) {
+    const info = getNetworkInfo(baseIP, subnetMask);
+    if (!info) return null;
+    const used = new Set(usedIPs);
+    for (let value = ipToInt(info.firstUsable); value <= ipToInt(info.lastUsable); value++) {
+        const candidate = intToIp(value);
+        if (!used.has(candidate)) return candidate;
+    }
+    return null;
+}
+
+// Τυχαία ελεύθερη διεύθυνση host στο δίκτυο
+function generateRandomIP(network, subnetMask, usedIPs = []) {
+    const info = getNetworkInfo(network, subnetMask);
+    if (!info) return null;
+    const randomStart = intToIp(ipToInt(info.firstUsable) + Math.floor(Math.random() * info.usableHosts));
+    return usedIPs.includes(randomStart)
+        ? getNextAvailableIP(randomStart, subnetMask, usedIPs)
+        : randomStart;
+}
+
+function generateRandomSubnetMask() {
+    const prefixes = [8, 16, 24, 25, 26, 27, 28, 29];
+    const prefix = prefixes[Math.floor(Math.random() * prefixes.length)];
+    return intToIp((0xFFFFFFFF << (32 - prefix)) >>> 0);
+}
+
+// RFC 1918 ιδιωτικές, loopback και link-local διευθύνσεις
+function isPrivateIP(ip) {
+    return ['10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16', '127.0.0.0/8', '169.254.0.0/16']
+        .some(cidr => {
+            const [network, prefix] = cidr.split('/');
+            return isOnLink(ip, network, intToIp((0xFFFFFFFF << (32 - Number(prefix))) >>> 0));
+        });
+}
+
 export {
     ipToInt,
     intToIp,
     getNetworkAddress,
     areInSameNetwork,
+    isOnLink,
     isValidIP,
     isValidSubnetMask,
     getNetworkInfo,
+    isUsableHostAddress,
     generateRandomIP,
     subnetMaskToCIDR,
     isIPInNetwork,
     generateRandomSubnetMask,
-    // Νέες συναρτήσεις
     isPrivateIP,
     getAvailableIP,
     getNextAvailableIP

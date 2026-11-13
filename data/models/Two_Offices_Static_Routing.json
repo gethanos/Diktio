@@ -1,0 +1,278 @@
+{
+  "metadata": {
+    "name": "Δύο γραφεία, δύο routers (στατική δρομολόγηση)",
+    "exportDate": "2026-11-13T13:31:29.632Z",
+    "version": "2.0",
+    "app": "Network Simulator",
+    "deviceCount": 8,
+    "connectionCount": 7
+  },
+  "devices": [
+    {
+      "id": "device-1",
+      "type": "router",
+      "name": "Router Αθήνα",
+      "x": 420,
+      "y": 260,
+      "color": "#3498db",
+      "status": "online",
+      "interfaces": {
+        "wan": {
+          "ip": "10.0.0.1",
+          "subnetMask": "255.255.255.252",
+          "gateway": "0.0.0.0",
+          "dns": [
+            "8.8.8.8"
+          ]
+        },
+        "lan": {
+          "ip": "192.168.1.1",
+          "subnetMask": "255.255.255.0",
+          "gateway": "0.0.0.0",
+          "dns": [
+            "192.168.1.1"
+          ]
+        },
+        "lan2": {
+          "ip": "192.168.2.1",
+          "subnetMask": "255.255.255.0",
+          "gateway": "0.0.0.0",
+          "dns": [
+            "192.168.2.1"
+          ],
+          "enabled": false
+        }
+      },
+      "routingTable": [
+        {
+          "network": "192.168.3.0",
+          "mask": "255.255.255.0",
+          "gateway": "10.0.0.2",
+          "interface": "wan",
+          "metric": 1
+        }
+      ],
+      "connectionInterfaces": {
+        "conn_1794576689628_pltwlvdxp": "lan",
+        "conn_1794576689629_ifsua3hh4": "wan"
+      },
+      "connections": [
+        "conn_1794576689628_pltwlvdxp",
+        "conn_1794576689629_ifsua3hh4"
+      ]
+    },
+    {
+      "id": "device-2",
+      "type": "router",
+      "name": "Router Θεσσαλονίκη",
+      "x": 780,
+      "y": 260,
+      "color": "#3498db",
+      "status": "online",
+      "interfaces": {
+        "wan": {
+          "ip": "10.0.0.2",
+          "subnetMask": "255.255.255.252",
+          "gateway": "0.0.0.0",
+          "dns": [
+            "8.8.8.8"
+          ]
+        },
+        "lan": {
+          "ip": "192.168.3.1",
+          "subnetMask": "255.255.255.0",
+          "gateway": "0.0.0.0",
+          "dns": [
+            "192.168.3.1"
+          ]
+        },
+        "lan2": {
+          "ip": "192.168.2.1",
+          "subnetMask": "255.255.255.0",
+          "gateway": "0.0.0.0",
+          "dns": [
+            "192.168.2.1"
+          ],
+          "enabled": false
+        }
+      },
+      "routingTable": [
+        {
+          "network": "192.168.1.0",
+          "mask": "255.255.255.0",
+          "gateway": "10.0.0.1",
+          "interface": "wan",
+          "metric": 1
+        }
+      ],
+      "connectionInterfaces": {
+        "conn_1794576689628_acz85nvn8": "lan",
+        "conn_1794576689629_ifsua3hh4": "wan"
+      },
+      "connections": [
+        "conn_1794576689628_acz85nvn8",
+        "conn_1794576689629_ifsua3hh4"
+      ]
+    },
+    {
+      "id": "device-3",
+      "type": "switch",
+      "name": "Switch Αθήνα",
+      "x": 180,
+      "y": 260,
+      "color": "#2ecc71",
+      "ip": "N/A",
+      "subnetMask": "255.255.255.0",
+      "gateway": "0.0.0.0",
+      "dns": [],
+      "status": "online",
+      "connectionInterfaces": {},
+      "connections": [
+        "conn_1794576689628_pltwlvdxp",
+        "conn_1794576689628_rhoc09f9m",
+        "conn_1794576689628_ctdk1k8wv"
+      ]
+    },
+    {
+      "id": "device-4",
+      "type": "switch",
+      "name": "Switch Θεσσαλονίκη",
+      "x": 1020,
+      "y": 260,
+      "color": "#2ecc71",
+      "ip": "N/A",
+      "subnetMask": "255.255.255.0",
+      "gateway": "0.0.0.0",
+      "dns": [],
+      "status": "online",
+      "connectionInterfaces": {},
+      "connections": [
+        "conn_1794576689628_acz85nvn8",
+        "conn_1794576689628_vubr07t6q",
+        "conn_1794576689628_jn4l94sis"
+      ]
+    },
+    {
+      "id": "device-5",
+      "type": "computer",
+      "name": "Υπολογιστής Α1",
+      "x": 40,
+      "y": 120,
+      "color": "#e74c3c",
+      "ip": "192.168.1.10",
+      "subnetMask": "255.255.255.0",
+      "gateway": "192.168.1.1",
+      "dns": [
+        "192.168.1.1"
+      ],
+      "domainName": null,
+      "status": "online",
+      "connectionInterfaces": {},
+      "connections": [
+        "conn_1794576689628_rhoc09f9m"
+      ]
+    },
+    {
+      "id": "device-6",
+      "type": "printer",
+      "name": "Εκτυπωτής Α",
+      "x": 40,
+      "y": 400,
+      "color": "#34495e",
+      "ip": "192.168.1.20",
+      "subnetMask": "255.255.255.0",
+      "gateway": "192.168.1.1",
+      "dns": [
+        "192.168.1.1"
+      ],
+      "domainName": null,
+      "status": "online",
+      "connectionInterfaces": {},
+      "connections": [
+        "conn_1794576689628_ctdk1k8wv"
+      ]
+    },
+    {
+      "id": "device-7",
+      "type": "computer",
+      "name": "Υπολογιστής Β1",
+      "x": 1260,
+      "y": 120,
+      "color": "#e74c3c",
+      "ip": "192.168.3.10",
+      "subnetMask": "255.255.255.0",
+      "gateway": "192.168.3.1",
+      "dns": [
+        "192.168.3.1"
+      ],
+      "domainName": null,
+      "status": "online",
+      "connectionInterfaces": {},
+      "connections": [
+        "conn_1794576689628_vubr07t6q"
+      ]
+    },
+    {
+      "id": "device-8",
+      "type": "server",
+      "name": "Server Β",
+      "x": 1260,
+      "y": 400,
+      "color": "#9b59b6",
+      "ip": "192.168.3.20",
+      "subnetMask": "255.255.255.0",
+      "gateway": "192.168.3.1",
+      "dns": [
+        "192.168.3.1"
+      ],
+      "domainName": null,
+      "status": "online",
+      "connectionInterfaces": {},
+      "connections": [
+        "conn_1794576689628_jn4l94sis"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "conn_1794576689628_pltwlvdxp",
+      "device1Id": "device-1",
+      "device2Id": "device-3",
+      "interface1": "lan"
+    },
+    {
+      "id": "conn_1794576689628_rhoc09f9m",
+      "device1Id": "device-5",
+      "device2Id": "device-3"
+    },
+    {
+      "id": "conn_1794576689628_ctdk1k8wv",
+      "device1Id": "device-6",
+      "device2Id": "device-3"
+    },
+    {
+      "id": "conn_1794576689628_acz85nvn8",
+      "device1Id": "device-2",
+      "device2Id": "device-4",
+      "interface1": "lan"
+    },
+    {
+      "id": "conn_1794576689628_vubr07t6q",
+      "device1Id": "device-7",
+      "device2Id": "device-4"
+    },
+    {
+      "id": "conn_1794576689628_jn4l94sis",
+      "device1Id": "device-8",
+      "device2Id": "device-4"
+    },
+    {
+      "id": "conn_1794576689629_ifsua3hh4",
+      "device1Id": "device-1",
+      "device2Id": "device-2",
+      "interface1": "wan",
+      "interface2": "wan"
+    }
+  ],
+  "dnsRecords": {}
+}

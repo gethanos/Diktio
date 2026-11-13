@@ -5,7 +5,7 @@
     "version": "2.0",
     "app": "Network Simulator",
     "deviceCount": 6,
-    "connectionCount": 6
+    "connectionCount": 5
   },
   "devices": [
     {
@@ -99,12 +99,10 @@
         }
       ],
       "connectionInterfaces": {
-        "conn_1765551055064_s5z2odbf2": "lan",
         "conn_1765551270047_sbh9m0zia": "wan",
         "conn_1765551327188_pwveinupf": "lan"
       },
       "connections": [
-        "conn_1765551055064_s5z2odbf2",
         "conn_1765551270047_sbh9m0zia",
         "conn_1765551327188_pwveinupf"
       ]
@@ -206,12 +204,6 @@
       "id": "conn_1765551034994_xgjoq0es1",
       "device1Id": "device-3",
       "device2Id": "device-5",
-      "status": "connected"
-    },
-    {
-      "id": "conn_1765551055064_s5z2odbf2",
-      "device1Id": "device-2",
-      "device2Id": "device-7",
       "status": "connected"
     },
     {

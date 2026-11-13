@@ -21,8 +21,10 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
+import { isValidIP } from './network-core.js';
+import { getL3Interfaces } from './routing.js';
+
 // Διαχείριση προσομοίωσης - ΔΙΟΡΘΩΜΕΝΗ ΈΚΔΟΣΗ με INTERNET ACCESS και FIXED PING
-import { areInSameNetwork } from './network-core.js';
 
 class SimulationManager {
     constructor(connectionManager) {
@@ -417,119 +419,51 @@ class SimulationManager {
         }
     }
     
-    // Έλεγχος αν IP είναι εξωτερική (Internet)
-    isExternalIP(ip) {
-        if (!ip || ip === 'N/A') return false;
-        
-        const privateRanges = [
-            /^10\./, /^172\.(1[6-9]|2[0-9]|3[0-1])\./, /^192\.168\./,
-            /^127\./, /^169\.254\./, /^203\.0\.113\./
-        ];
-        
-        return !privateRanges.some(regex => regex.test(ip));
-    }
+
     
-    // Δοκιμή ping από συγκεκριμένη συσκευή
-    testPingFromDeviceWithPrompt(fromDevice, deviceManager) {
-        return new Promise((resolve) => {
-            const devices = deviceManager.devices;
-            
-            // Φίλτρο συσκευών με έγκυρη IP (εκτός από τον εαυτό του)
-            // ΑΠΑΓΟΡΕΥΟΥΜΕ συσκευές χωρίς IP (όπως unmanaged switches)
-            const availableDevices = devices.filter(d => 
-                d.id !== fromDevice.id && 
-                d.ip && d.ip !== 'N/A' && d.ip !== '0.0.0.0' && d.ip !== undefined &&
-                // ΑΠΑΓΟΡΕΥΣΗ συσκευών χωρίς IP
-                !(d.type === 'switch' && d.ip === 'N/A')
-            );
-            
-            if (availableDevices.length === 0) {
-                alert('Δεν υπάρχουν άλλες συσκευές με έγκυρη IP για ping');
-                this.addLog('Δεν υπάρχουν άλλες συσκευές με έγκυρη IP', 'warning');
-                resolve({ success: false });
-                return;
-            }
-            
-            // Δημιουργία μηνύματος prompt
-            let message = `Ping από ${fromDevice.name} (${this.getIPForLog(fromDevice)})\n\n`;
-            message += 'Διαθέσιμες συσκευές:\n';
-            
-            availableDevices.forEach((device, index) => {
-                const gatewayInfo = device.gateway && device.gateway !== '0.0.0.0' ? 
-                    ` [GW: ${device.gateway}]` : '';
-                const ipStatus = (!device.ip || device.ip === 'N/A') ? ' (Χωρίς IP)' : '';
-                message += `${index + 1}. ${device.name} - ${device.ip || 'N/A'}${ipStatus}${gatewayInfo}\n`;
-            });
-            
-            message += '\nΕισάγετε:\n';
-            message += '- Αριθμό για επιλογή συσκευής (π.χ. 1)\n';
-            message += '- IP διεύθυνση (π.χ. 192.168.1.1)\n';
-            
-            const userInput = prompt(message);
-            
-            if (!userInput) {
-                this.addLog('Ακυρώθηκε η δοκιμή ping', 'info');
-                resolve(null);
-                return;
-            }
-            
-            // Επεξεργασία εισόδου
-            const input = userInput.trim();
-            
-            // Έλεγχος για αριθμό
-            let selectedIndex = null;
-            
-            // ΜΟΝΟ αν το input είναι αποκλειστικά ψηφία
-            if (/^\d+$/.test(input)) {
-                const num = parseInt(input, 10);
-                if (num >= 1 && num <= availableDevices.length) {
-                    selectedIndex = num - 1;
-                }
-            }
-            
-            if (selectedIndex !== null) {
-                // Επιλογή συσκευής από τη λίστα
-                const targetDevice = availableDevices[selectedIndex];
-                this.addLog(`Επιλέχθηκε: ${targetDevice.name} (${targetDevice.ip})`, 'info');
-                const result = this.testPing(fromDevice, targetDevice);
-                resolve(result);
-            } else {
-                // Έλεγχος αν είναι IP διεύθυνση
-                if (window.isValidIP && window.isValidIP(input)) {
-                    // Ψάξε συσκευή με αυτή την IP
-                    const targetDevice = deviceManager.getDeviceByIP(input);
-                    if (targetDevice) {
-                        // Βρέθηκε συσκευή - κάνε ping
-                        const result = this.testPing(fromDevice, targetDevice);
-                        resolve(result);
-                    } else {
-                        // ΔΕΝ βρέθηκε συσκευή με αυτή την IP
-                        this.addLog(`PING ${fromDevice.name} → ${input} - ΑΠΟΤΥΧΙΑ (Δεν βρέθηκε συσκευή με αυτή την IP)`, 'error');
-                        
-                        // Αναζήτηση διαδρομής (ακόμα και αν δεν υπάρχει συσκευή)
-                        const commInfo = this.connectionManager.canDevicesCommunicateWithPath(
-                            fromDevice, 
-                            { ip: input, type: 'external', name: `Εξωτερικό ${input}` }
-                        );
-                        
-                        if (commInfo.canCommunicate && commInfo.path) {
-                            // Μπορεί να φτάσει (π.χ. μέσω gateway) αλλά δεν υπάρχει συσκευή
-                            this.addLog(`Η συσκευή ${fromDevice.name} μπορεί να φτάσει στην IP ${input} (δεν υπάρχει συσκευή)`, 'warning');
-                            this.visualizePath(commInfo.path, fromDevice, { name: `Εξωτερικό ${input}`, x: 100, y: 100 });
-                            resolve({ success: true, viaGateway: commInfo.viaGateway, external: true });
-                        } else {
-                            // Δεν μπορεί να φτάσει
-                            this.addLog(`Η συσκευή ${fromDevice.name} ΔΕΝ μπορεί να φτάσει στην IP ${input}`, 'error');
-                            resolve({ success: false, external: true });
-                        }
-                    }
-                } else {
-                    alert(`Μη έγκυρη είσοδος: "${input}"\n\nΕισάγετε:\n1. Αριθμό από 1 έως ${availableDevices.length} (για συσκευή)\n2. Έγκυρη IP διεύθυνση (π.χ. 192.168.1.1)`);
-                    this.addLog(`Μη έγκυρη είσοδος: ${input}`, 'error');
-                    resolve({ success: false, error: 'Invalid input' });
-                }
-            }
-        });
+    // Επιλογή προορισμού με prompt και ping (ή δοκιμή υπηρεσίας, π.χ. { protocol: 'tcp', port: 80 }).
+    // Στη λίστα μπαίνουν όλες οι συσκευές με IP, και οι routers/firewalls. Δεκτή είναι και IP διεύθυνση.
+    testPingFromDeviceWithPrompt(fromDevice, deviceManager, service = null) {
+        const action = service ? `Δοκιμή ${this.describeService(service)}` : 'Ping';
+        const candidates = deviceManager.devices.filter(d => d.id !== fromDevice.id && getL3Interfaces(d).length > 0);
+
+        if (candidates.length === 0) {
+            alert('Δεν υπάρχουν άλλες συσκευές με έγκυρη IP');
+            this.addLog('Δεν υπάρχουν άλλες συσκευές με έγκυρη IP', 'warning');
+            return { success: false };
+        }
+
+        const list = candidates.map((device, index) => {
+            const addresses = getL3Interfaces(device).map(iface => iface.ip).join(', ');
+            const gateway = device.gateway && device.gateway !== '0.0.0.0' ? ` [GW: ${device.gateway}]` : '';
+            return `${index + 1}. ${device.name} - ${addresses}${gateway}`;
+        }).join('\n');
+
+        const input = prompt(
+            `${action} από ${fromDevice.name} (${this.getIPForLog(fromDevice)})\n\n` +
+            `Διαθέσιμες συσκευές:\n${list}\n\n` +
+            `Εισάγετε αριθμό συσκευής (π.χ. 1) ή IP διεύθυνση (π.χ. 192.168.1.1):`
+        )?.trim();
+
+        if (!input) {
+            this.addLog(`Ακυρώθηκε: ${action}`, 'info');
+            return null;
+        }
+
+        if (/^\d+$/.test(input) && Number(input) >= 1 && Number(input) <= candidates.length) {
+            return this.testPing(fromDevice, candidates[Number(input) - 1], { ...service });
+        }
+
+        if (isValidIP(input)) {
+            const target = deviceManager.getDeviceByIP(input);
+            if (target) return this.testPing(fromDevice, target, { ...service, targetIP: input });
+            this.addLog(`${action} ${fromDevice.name} → ${input} - ΑΠΟΤΥΧΙΑ: καμία συσκευή δεν έχει αυτή την IP, δεν υπάρχει απάντηση`, 'error');
+            return { success: false };
+        }
+
+        alert(`Μη έγκυρη είσοδος: "${input}"\n\nΕισάγετε αριθμό από 1 έως ${candidates.length} ή έγκυρη IP διεύθυνση.`);
+        this.addLog(`Μη έγκυρη είσοδος: ${input}`, 'error');
+        return { success: false, error: 'Invalid input' };
     }
     
     // Βοηθητική συνάρτηση για έλεγχο αν συσκευή έχει έγκυρη IP
@@ -553,218 +487,43 @@ class SimulationManager {
         return device.ip && device.ip !== 'N/A' && device.ip !== '0.0.0.0' && device.ip !== undefined;
     }
     
-    // Χειρισμός router ως source για ping
-    handleRouterAsSource(router, targetDevice) {
-        const routerLanIP = router.interfaces?.lan?.ip;
-        const routerSubnet = router.interfaces?.lan?.subnetMask;
-        const routerWanIP = router.interfaces?.wan?.ip;
-        
-        // 1. Έλεγχος αν ο προορισμός είναι στο LAN
-        if (targetDevice.ip && routerLanIP) {
-            if (areInSameNetwork(targetDevice.ip, routerLanIP, targetDevice.subnetMask, routerSubnet)) {
-                // LAN-to-LAN communication
-                const path = this.connectionManager.findPathBetweenDevices(router, targetDevice);
-                if (path && path.length > 0) {
-                    this.addLog(`PING ${router.name} (LAN) → ${targetDevice.name} - ΕΠΙΤΥΧΙΑ (ίδιο LAN)`, 'success');
-                    this.createPingPacket(router, targetDevice);
-                    return { success: true, viaGateway: false, path };
-                }
-            }
-        }
-        
-        // 2. Για εξωτερικούς προορισμούς, χρησιμοποιούμε το WAN interface
-        // (υπάρχοντη λογική)
-        return null; // Για default handling
-    }
+
     
-    testPing(fromDevice, toDevice) {
-        console.log(`[PING] Έλεγχος: ${fromDevice.name} → ${toDevice.name}`);
-
-        const fromIP = this.getIPForLog(fromDevice);
-        const toIP = this.getIPForLog(toDevice);
-        
-        // ΑΜΕΣΗ ΑΠΟΡΡΙΨΗ: Αν ο προορισμός δεν έχει IP
-        if (!this.hasValidIP(toDevice)) {
-            this.addLog(`PING ${fromDevice.name} (${fromIP}) → ${toDevice.name} (${toIP}) ΑΠΕΤΥΧΕ: Ο προορισμός δεν έχει έγκυρη IP διεύθυνση`, 'error');
-            if (typeof window.toggleConsole === 'function') {
-                const consoleElement = document.getElementById('console');
-                if (consoleElement && consoleElement.style.display === 'none') {
-                    window.toggleConsole();
-                }
-            }
-            return { success: false, noIP: true };
-        }
-        
-        // ΑΜΕΣΗ ΑΠΟΡΡΙΨΗ: Αν η πηγή δεν έχει IP (για πληρότητα)
-        if (!this.hasValidIP(fromDevice)) {
-            this.addLog(`PING ${fromDevice.name} (${fromIP}) → ${toDevice.name} (${toIP}) ΑΠΕΤΥΧΕ: Η πηγή δεν έχει έγκυρη IP διεύθυνση`, 'error');
-            if (typeof window.toggleConsole === 'function') {
-                const consoleElement = document.getElementById('console');
-                if (consoleElement && consoleElement.style.display === 'none') {
-                    window.toggleConsole();
-                }
-            }
-            return { success: false, noIP: true };
-        }
-
-        // ΕΙΔΙΚΗ ΠΕΡΙΠΤΩΣΗ: Router ως source
-        if (fromDevice.type === 'router') {
-            const routerResult = this.handleRouterAsSource(fromDevice, toDevice);
-            if (routerResult !== null) {
-                return routerResult;
-            }
-        }
-
-        // Helper για IP/Subnet
-        const ipToInt = ip => {
-            if (!ip || ip === 'N/A') return 0;
-            return ip.split('.').reduce((acc, val) => (acc << 8) + (+val), 0);
-        };
-        
-        const getEffectiveIP = (device) => {
-            if (device.type === 'router') {
-                return device.interfaces?.lan?.ip || device.ip;
-            }
-            return device.ip;
-        };
-        
-        const getEffectiveSubnet = (device) => {
-            if (device.type === 'router') {
-                return device.interfaces?.lan?.subnetMask || device.subnetMask || '255.255.255.0';
-            }
-            return device.subnetMask || '255.255.255.0';
-        };
-        
-        const inSameSubnet = (device1, device2) => {
-            const ip1 = getEffectiveIP(device1);
-            const mask1 = getEffectiveSubnet(device1);
-            const ip2 = getEffectiveIP(device2);
-            const mask2 = getEffectiveSubnet(device2);
-            
-            if (!ip1 || !mask1 || !ip2 || !mask2) return false;
-            return (ipToInt(ip1) & ipToInt(mask1)) === (ipToInt(ip2) & ipToInt(mask2));
-        };
-
-        // 1. Ελέγχουμε αν ο source θεωρεί τον target ως local subnet
-        const isLocal = inSameSubnet(fromDevice, toDevice);
-
-        // 2. Αν ΔΕΝ είναι local subnet, ελέγχουμε αν υπάρχει gateway/router στον source
-        let requiresGateway = false;
-        let gatewayDevice = null;
-        let finalPath = null;
-
-        if (!isLocal) {
-            // Απαιτείται gateway
-            // Χρησιμοποιούμε τη συνάρτηση getDeviceGateway από το connectionManager
-            const fromGatewayIP = this.connectionManager.getDeviceGateway(fromDevice);
-            
-            if (fromGatewayIP && fromGatewayIP !== '0.0.0.0' && fromGatewayIP !== 'N/A') {
-                requiresGateway = true;
-                gatewayDevice = window.deviceManager.getDeviceByIP(fromGatewayIP);
-
-                if (gatewayDevice && gatewayDevice.type === 'router') {
-                    // Βρες διαδρομή από device προς gateway
-                    const pathToGateway = this.connectionManager.findPathBetweenDevices(fromDevice, gatewayDevice);
-                    // Βρες από gateway προς toDevice
-                    const pathFromGateway = this.connectionManager.findPathBetweenDevices(gatewayDevice, toDevice);
-
-                    if (pathToGateway && pathFromGateway && pathToGateway.length > 0 && pathFromGateway.length > 0) {
-                        // Ενοποίηση διαδρομής (χωρίς διπλότυπο gateway)
-                        if (pathToGateway[pathToGateway.length - 1].id === pathFromGateway[0].id) {
-                            finalPath = [...pathToGateway, ...pathFromGateway.slice(1)];
-                        } else {
-                            finalPath = [...pathToGateway, ...pathFromGateway];
-                        }
-
-                        this.addLog(`PING ${fromDevice.name} (${fromIP}) → ${toDevice.name} (${toIP}) ΜΕΣΩ GATEWAY (${gatewayDevice.name}) - ΕΠΙΤΥΧΙΑ`, 'success');
-                        this.addLog(`Διαδρομή: ${finalPath.map(d => d.name).join(' → ')}`, 'info');
-                        console.log(`[PING] Πλήρης διαδρομή (μέσω gateway):`, finalPath.map(d => d.name).join(' → '));
-                        if (typeof window.toggleConsole === 'function') {
-                            const consoleElement = document.getElementById('console');
-                            if (consoleElement && consoleElement.style.display === 'none') {
-                                window.toggleConsole();
-                            }
-                        }
-                        this.createPingPacket(fromDevice, toDevice);
-                        return { success: true, viaGateway: true, path: finalPath };
-                    } else {
-                        this.addLog(`PING ${fromDevice.name} (${fromIP}) → ${toDevice.name} (${toIP}) - ΑΠΟΤΥΧΙΑ (δεν υπάρχει πλήρης διαδρομή μέσω gateway)`, 'error');
-                        if (typeof window.toggleConsole === 'function') {
-                            const consoleElement = document.getElementById('console');
-                            if (consoleElement && consoleElement.style.display === 'none') {
-                                window.toggleConsole();
-                            }
-                        }
-                        return { success: false, viaGateway: true };
-                    }
-                } else {
-                    this.addLog(`PING ${fromDevice.name} (${fromIP}) → ${toDevice.name} (${toIP}) - ΑΠΟΤΥΧΙΑ (gateway δεν είναι router ή δεν βρέθηκε)`, 'error');
-                    if (typeof window.toggleConsole === 'function') {
-                        const consoleElement = document.getElementById('console');
-                        if (consoleElement && consoleElement.style.display === 'none') {
-                            window.toggleConsole();
-                        }
-                    }
-                    return { success: false, viaGateway: true };
-                }
-            } else {
-                // Δεν υπάρχει gateway - ping δεν περνάει!
-                this.addLog(`PING ${fromDevice.name} (${fromIP}) → ${toDevice.name} (${toIP}) ΑΠΕΤΥΧΕ: διαφορετικό subnet & δεν υπάρχει gateway`, 'error');
-                if (typeof window.toggleConsole === 'function') {
-                    const consoleElement = document.getElementById('console');
-                    if (consoleElement && consoleElement.style.display === 'none') {
-                        window.toggleConsole();
-                    }
-                }
-                return { success: false };
-            }
-        } else {
-            // Το target θεωρείται local subnet - απευθείας ping
-            const communication = this.connectionManager.canDevicesCommunicateWithPath(fromDevice, toDevice);
-
-            if (communication.canCommunicate) {
-                if (communication.viaGateway) {
-                    this.addLog(`PING ${fromDevice.name} (${fromIP}) → ${toDevice.name} (${toIP}) ΜΕΣΩ GATEWAY - ΕΠΙΤΥΧΙΑ`, 'success');
-                } else {
-                    this.addLog(`PING ${fromDevice.name} (${fromIP}) → ${toDevice.name} (${toIP}) - ΕΠΙΤΥΧΙΑ`, 'success');
-                }
-                if (typeof window.toggleConsole === 'function') {
-                    const consoleElement = document.getElementById('console');
-                    if (consoleElement && consoleElement.style.display === 'none') {
-                        window.toggleConsole();
-                    }
-                }
-                if (communication.path) {
-                    this.addLog(`Διαδρομή: ${communication.path.map(d => d.name).join(' → ')}`, 'info');
-                    console.log(`[PING] Πλήρης διαδρομή: ${communication.path.map(d => d.name).join(' → ')}`);
-                }
-                // direct packet animation
-                this.createPingPacket(fromDevice, toDevice);
-                return { success: true, viaGateway: communication.viaGateway, path: communication.path };
-            } else {
-                this.addLog(`PING ${fromDevice.name} (${fromIP}) → ${toDevice.name} (${toIP}) - ΑΠΟΤΥΧΙΑ: δεν υπάρχει φυσική διαδρομή`, 'error');
-                if (typeof window.toggleConsole === 'function') {
-                    const consoleElement = document.getElementById('console');
-                    if (consoleElement && consoleElement.style.display === 'none') {
-                        window.toggleConsole();
-                    }
-                }
-                return { success: false };
-            }
+    // Όπως πριν: το αποτέλεσμα ενός ping ανοίγει το console αν είναι κλειστό
+    showConsole() {
+        const consoleElement = document.getElementById('console');
+        if (typeof window.toggleConsole === 'function' && consoleElement?.style.display === 'none') {
+            window.toggleConsole();
         }
     }
+
+    // options: { targetIP, protocol, port }. Χωρίς protocol είναι ICMP ping.
+    testPing(fromDevice, toDevice, options = {}) {
+        this.showConsole();
+        const result = this.connectionManager.canDevicesCommunicateWithPath(fromDevice, toDevice, options);
+        const action = options.protocol && options.protocol !== 'icmp' ? this.describeService(options) : 'PING';
+        const label = `${action} ${fromDevice.name} (${result.sourceIP ?? this.getIPForLog(fromDevice)}) → ` +
+                      `${toDevice.name} (${result.targetIP ?? this.getIPForLog(toDevice)})`;
+
+        if (!result.canCommunicate) {
+            this.addLog(`${label} - ΑΠΟΤΥΧΙΑ: ${this.describePingFailure(result)}`, 'error');
+            return { success: false, reason: result.reason };
+        }
+
+        this.addLog(`${label} - ΕΠΙΤΥΧΙΑ${result.viaGateway ? ' ΜΕΣΩ GATEWAY' : ''}`, 'success');
+        this.addLog(`Διαδρομή: ${result.path.map(d => d.name).join(' → ')}`, 'info');
+        this.createPingPacket(fromDevice, toDevice, result.path);
+        return { success: true, viaGateway: result.viaGateway, path: result.path };
+    }
     
-    // Βοηθητική συνάρτηση για IP στο log
+    // Για router χωρίς ρητή διεπαφή: η πρώτη ενεργή διεπαφή με IP
     getIPForLog(device) {
         if (!device) return 'N/A';
-        
-        if (device.type === 'router') {
-            // Για router: LAN IP αν υπάρχει, αλλιώς WAN IP, αλλιώς N/A
-            return device.interfaces?.lan?.ip || device.interfaces?.wan?.ip || 'N/A';
-        }
-        
-        // Για άλλες συσκευές: απλό IP
-        return device.ip || 'N/A';
+        if (device.type !== 'router') return device.ip || 'N/A';
+        const iface = ['lan', 'lan2', 'wan']
+            .map(name => device.interfaces?.[name])
+            .find(i => i && i.enabled !== false && i.ip && i.ip !== 'N/A');
+        return iface?.ip ?? 'N/A';
     }
     
     // Δοκιμή ping μεταξύ τυχαίων συσκευών
@@ -789,94 +548,52 @@ class SimulationManager {
         return this.testPing(device1, device2);
     }
     
-    // Δοκιμή επικοινωνίας μεταξύ δύο συσκευών
+    // Ίδια απόφαση με το ping, με οπτικοποίηση της διαδρομής
     testCommunicationBetween(device1, device2) {
-        // Helper για subnets
-        const ipToInt = ip => {
-            if (!ip || ip === 'N/A') return 0;
-            return ip.split('.').reduce((acc, val) => (acc << 8) + (+val), 0);
-        };
-        
-        const getEffectiveIP = (device) => {
-            if (device.type === 'router') {
-                return device.interfaces?.lan?.ip || device.ip;
-            }
-            return device.ip;
-        };
-        
-        const getEffectiveSubnet = (device) => {
-            if (device.type === 'router') {
-                return device.interfaces?.lan?.subnetMask || device.subnetMask || '255.255.255.0';
-            }
-            return device.subnetMask || '255.255.255.0';
-        };
-        
-        const inSameSubnet = (dev1, dev2) => {
-            const ip1 = getEffectiveIP(dev1);
-            const mask1 = getEffectiveSubnet(dev1);
-            const ip2 = getEffectiveIP(dev2);
-            const mask2 = getEffectiveSubnet(dev2);
-            
-            if (!ip1 || !mask1 || !ip2 || !mask2) return false;
-            return (ipToInt(ip1) & ipToInt(mask1)) === (ipToInt(ip2) & ipToInt(mask2));
-        };
+        const result = this.connectionManager.canDevicesCommunicateWithPath(device1, device2);
 
-        // Ελέγχουμε αν το device1 θεωρεί το device2 local (ρεαλιστικό)
-        const isLocal = inSameSubnet(device1, device2);
-
-        let finalPath = null;
-        let viaGateway = false;
-
-        if (!isLocal) {
-            // Απαιτείται gateway;
-            const fromGatewayIP = this.connectionManager.getDeviceGateway(device1);
-            
-            if (fromGatewayIP && fromGatewayIP !== '0.0.0.0' && fromGatewayIP !== 'N/A') {
-                const gatewayDevice = window.deviceManager.getDeviceByIP(fromGatewayIP);
-
-                if (gatewayDevice && gatewayDevice.type === 'router') {
-                    // Route: source → router
-                    const pathToGateway = this.connectionManager.findPathBetweenDevices(device1, gatewayDevice);
-                    // Route: router → target
-                    const pathFromGateway = this.connectionManager.findPathBetweenDevices(gatewayDevice, device2);
-
-                    if (pathToGateway && pathFromGateway && pathToGateway.length > 0 && pathFromGateway.length > 0) {
-                        // Ενοποίηση διαδρομής (χωρίς διπλό router στο path)
-                        if (pathToGateway[pathToGateway.length - 1].id === pathFromGateway[0].id) {
-                            finalPath = [...pathToGateway, ...pathFromGateway.slice(1)];
-                        } else {
-                            finalPath = [...pathToGateway, ...pathFromGateway];
-                        }
-                        viaGateway = true;
-                    }
-                }
-            }
-        } else {
-            // Direct (ίδιο subnet του source)
-            finalPath = this.connectionManager.findPathBetweenDevices(device1, device2);
-            viaGateway = false;
+        if (!result.canCommunicate) {
+            this.addLog(`ΔΟΚΙΜΗ: ${device1.name} → ${device2.name} - ΑΠΟΤΥΧΙΑ: ${this.describePingFailure(result)}`, 'error');
+            return { success: false, reason: result.reason };
         }
 
-        // Αν υπάρχει path, κάνε visualize hop-by-hop, δείχνοντας τον router ΟΠΟΥ χρειάζεται!
-        if (finalPath && finalPath.length > 0) {
-            const viaText = viaGateway ? 'ΜΕΣΩ ROUTER' : 'ΑΜΕΣΑ';
-            this.addLog(`ΔΟΚΙΜΗ: ${device1.name} → ${device2.name} - ΕΠΙΤΥΧΙΑ ${viaText}`, 'success');
-            this.addLog(`Διαδρομή: ${finalPath.map(d => d.name).join(' → ')}`, 'info');
-            this.visualizePath(finalPath, device1, device2);
-            return { success: true, viaGateway, path: finalPath };
-        } else {
-            this.addLog(`ΔΟΚΙΜΗ: ${device1.name} → ${device2.name} - ΑΠΟΤΥΧΙΑ (αδύνατη επικοινωνία)`, 'error');
-            return { success: false };
-        }
+        this.addLog(`ΔΟΚΙΜΗ: ${device1.name} → ${device2.name} - ΕΠΙΤΥΧΙΑ ${result.viaGateway ? 'ΜΕΣΩ ROUTER' : 'ΑΜΕΣΑ'}`, 'success');
+        this.addLog(`Διαδρομή: ${result.path.map(d => d.name).join(' → ')}`, 'info');
+        this.visualizePath(result.path, device1, device2);
+        return { success: true, viaGateway: result.viaGateway, path: result.path };
     }
     
-    // Βοηθητική συνάρτηση για logging
+    // Το console ανοίγει μόνο σε σφάλμα (ο UIManager το κάνει ήδη στο showConsoleIfError)
     addLog(message, type = 'info') {
         if (typeof window.addLog === 'function') {
             window.addLog(message, type);
         } else {
             console.log(`[ΠΡΟΣΟΜΟΙΩΣΗ ${type.toUpperCase()}] ${message}`);
         }
+    }
+
+    // Μηνύματα αποτυχίας ανά αιτία (routing.js). Το πρόθεμα reply- σημαίνει ότι
+    // έφτασε το αίτημα αλλά όχι η απάντηση.
+    describePingFailure(result) {
+        const reasons = {
+            'no-source-ip': 'η πηγή δεν έχει έγκυρη IP',
+            'no-target-ip': 'ο προορισμός δεν έχει έγκυρη IP',
+            'no-ip': 'μία από τις συσκευές δεν έχει έγκυρη IP',
+            'no-route': 'δεν υπάρχει διαδρομή (ούτε on-link ούτε gateway/route)',
+            'arp-failed': 'το επόμενο βήμα δεν απαντά σε ARP στο ίδιο δίκτυο (καλώδιο, μάσκα ή gateway)',
+            'ip-conflict': 'διπλότυπη IP στο ίδιο δίκτυο',
+            'not-a-router': 'το gateway δεν είναι router',
+            'ttl-expired': 'βρόχος δρομολόγησης (TTL expired)',
+            'firewall-blocked': `μπλοκαρίστηκε από firewall (${result.detail})`
+        };
+        const isReply = result.reason?.startsWith('reply-');
+        const reason = reasons[isReply ? result.reason.slice('reply-'.length) : result.reason] ?? result.reason;
+        const where = result.failedAt ? ` στο ${result.failedAt.name}` : '';
+        return isReply ? `δεν επιστρέφει απάντηση: ${reason}${where}` : `${reason}${where}`;
+    }
+
+    describeService({ protocol = 'icmp', port = null } = {}) {
+        return protocol === 'icmp' ? 'ICMP (ping)' : `${protocol.toUpperCase()}${port ? `/${port}` : ''}`;
     }
 }
 

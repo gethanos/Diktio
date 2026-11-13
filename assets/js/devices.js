@@ -21,7 +21,8 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-import { isValidIP, isValidSubnetMask, generateRandomIP } from './network-core.js';
+import { isValidIP, isValidSubnetMask, isOnLink, isUsableHostAddress, generateRandomIP, getNetworkAddress } from './network-core.js';
+import { createFirewallConfig, createRule, validateRule } from './firewall.js';
 
 // Διαχείριση συσκευών
 class DeviceManager {
@@ -91,6 +92,14 @@ class DeviceManager {
                 break;
             case 'dns':
                 device = this.createDNSDevice(deviceId, type, deviceName, x, y, element);
+                break;
+            case 'firewall':
+                // IP διαχείρισης όπως ένας host, δύο θύρες (inside/outside) και κανόνες
+                device = {
+                    ...this.createStandardDevice(deviceId, type, deviceName, x, y, element),
+                    connectionInterfaces: {},
+                    firewall: createFirewallConfig()
+                };
                 break;
             default:
                 device = this.createStandardDevice(deviceId, type, deviceName, x, y, element);
@@ -201,179 +210,35 @@ class DeviceManager {
     
     // Δημιουργία τυπικής συσκευής (computer, server, printer)
     createStandardDevice(deviceId, type, deviceName, x, y, element) {
-        // Δημιουργία τυχαίας IP εντός LAN range
-        let ipAddress, gateway = '0.0.0.0', dns = [];
-        const subnetMask = '255.255.255.0';
-        
-        // Προσπάθεια να βρεθεί router για να πάρουμε το LAN του
-        const router = this.devices.find(d => d.type === 'router');
-        if (router && router.interfaces.lan.ip !== 'N/A') {
-            const lanIP = router.interfaces.lan.ip;
-            const subnetMask = router.interfaces.lan.subnetMask;
-            ipAddress = generateRandomIP(lanIP, subnetMask);
-            gateway = lanIP;
-            dns = [lanIP];
-        } else {
-            // Δημιουργία τυχαίας IP
-            ipAddress = `192.168.${Math.floor(Math.random() * 254) + 1}.${Math.floor(Math.random() * 200) + 10}`;
-            dns = ['8.8.8.8'];
-        }
-        
-        // ΚΡΙΤΙΚΗ ΑΛΛΑΓΗ: Έλεγχος για διπλότυπη IP στο ίδιο subnet
-        // ΔΕΝ περνάμε deviceId γιατί η συσκευή δεν έχει προστεθεί ακόμα στον πίνακα
-        const duplicateIPWarning = this.checkForDuplicateIP(ipAddress, subnetMask, null);
-        
+        const router = this.devices.find(d => d.type === 'router' && isValidIP(d.interfaces.lan.ip));
+        const lan = router?.interfaces.lan;
+        const subnetMask = lan?.subnetMask ?? '255.255.255.0';
+        const ip = lan
+            ? this.allocateHostIP(lan.ip, subnetMask)
+            : this.allocateHostIP('192.168.1.0', subnetMask);
+
         return {
             id: deviceId,
-            type: type,
+            type,
             name: deviceName,
-            ip: ipAddress,
-            subnetMask: subnetMask,
-            gateway: gateway,
-            dns: dns,
-            x: x,
-            y: y,
-            element: element,
+            ip: ip ?? 'N/A',
+            subnetMask,
+            gateway: lan ? lan.ip : '0.0.0.0',
+            dns: lan ? [lan.ip] : ['8.8.8.8'],
+            x,
+            y,
+            element,
             connections: [],
             status: 'online',
             domainName: null,
             dnsCache: {},
-            hasDuplicateIP: false // Η νέα συσκευή δεν έχει διπλότυπο IP, οι υπάρχουσες έχουν
+            hasDuplicateIP: false
         };
     }
     
-    // Προσθήκη νέας βοηθητικής συνάρτησης για έλεγχο διπλότυπης IP - ΔΙΟΡΘΩΜΕΝΗ
-    checkForDuplicateIP(ip, subnetMask, currentDeviceId) {
-        if (!ip || ip === 'N/A') return { hasDuplicate: false, message: '' };
-        
-        const duplicateDevices = this.devices.filter(device => {
-            // Παράλειψη της τρέχουσας συσκευής ΜΟΝΟ αν υπάρχει ήδη στον πίνακα
-            if (currentDeviceId && device.id === currentDeviceId) return false;
-            
-            // Παράλειψη συσκευών χωρίς IP
-            if (!device.ip || device.ip === 'N/A') return false;
-            
-            // Έλεγχος routers (έχουν πολλαπλές διεπαφές)
-            if (device.type === 'router') {
-                const interfaces = device.interfaces;
-                for (const iface in interfaces) {
-                    const ifaceData = interfaces[iface];
-                    if (ifaceData.ip && ifaceData.ip !== 'N/A' && ifaceData.ip === ip) {
-                        return true;
-                    }
-                }
-                return false;
-            }
-            
-            // Έλεγχος για τυπικές συσκευές
-            return device.ip === ip;
-        });
-        
-        if (duplicateDevices.length > 0) {
-            // Έλεγχος αν είναι στο ίδιο subnet
-            const sameSubnetDevices = duplicateDevices.filter(device => {
-                if (device.type === 'router') {
-                    // Για routers, ελέγχουμε όλα τα interfaces
-                    const interfaces = device.interfaces;
-                    for (const iface in interfaces) {
-                        const ifaceData = interfaces[iface];
-                        if (ifaceData.ip && ifaceData.ip === ip && 
-                            ifaceData.subnetMask === subnetMask) {
-                            return true;
-                        }
-                    }
-                    return false;
-                }
-                
-                // Για άλλες συσκευές
-                return device.subnetMask === subnetMask;
-            });
-            
-            if (sameSubnetDevices.length > 0) {
-                const deviceNames = sameSubnetDevices.map(d => d.name).join(', ');
-                const warningMessage = `ΠΡΟΣΟΧΗ: Η διεύθυνση IP ${ip} υπάρχει ήδη στο ίδιο δίκτυο στις συσκευές: ${deviceNames}`;
-                
-                // Εφαρμογή προειδοποίησης στις υπάρχουσες συσκευές με διπλότυπο IP
-                sameSubnetDevices.forEach(duplicateDevice => {
-                    duplicateDevice.hasDuplicateIP = true;
-                    if (duplicateDevice.element) {
-                        duplicateDevice.element.style.border = '3px solid #ffcc00';
-                        duplicateDevice.element.style.boxShadow = '0 0 10px #ffcc00';
-                        duplicateDevice.element.classList.add('duplicate-ip-warning');
-                        
-                        // Προσθήκη εικονιδίου προειδοποίησης αν δεν υπάρχει ήδη
-                        if (!duplicateDevice.element.querySelector('.duplicate-ip-icon')) {
-                            const warningIcon = document.createElement('div');
-                            warningIcon.className = 'duplicate-ip-icon';
-                            warningIcon.innerHTML = '⚠️';
-                            warningIcon.style.position = 'absolute';
-                            warningIcon.style.top = '-10px';
-                            warningIcon.style.right = '-10px';
-                            warningIcon.style.fontSize = '20px';
-                            warningIcon.style.zIndex = '100';
-                            duplicateDevice.element.appendChild(warningIcon);
-                        }
-                    }
-                });
-                
-                // Προσθήκη μηνύματος στο console/log
-                if (typeof window.addLog === 'function') {
-                    window.addLog(warningMessage, 'warning');
-                } else {
-                    console.warn(warningMessage);
-                }
-                
-                return { 
-                    hasDuplicate: true, 
-                    message: warningMessage,
-                    duplicateDevices: sameSubnetDevices 
-                };
-            }
-        }
-        
-        return { hasDuplicate: false, message: '' };
-    }
+
     
-    // Βοηθητική συνάρτηση για αφαίρεση διπλότυπων IP ειδοποιήσεων
-    cleanupDuplicateIPWarnings() {
-        this.devices.forEach(device => {
-            if (device.hasDuplicateIP && device.element) {
-                // Έλεγχος αν η συσκευή έχει ακόμα διπλότυπο IP
-                let stillHasDuplicate = false;
-                
-                if (device.type === 'router') {
-                    // Έλεγχος όλων των interfaces του router
-                    const interfaces = device.interfaces;
-                    for (const iface in interfaces) {
-                        const ifaceData = interfaces[iface];
-                        if (ifaceData.ip && ifaceData.ip !== 'N/A') {
-                            // Χρήση της ίδιας μεθόδου αλλά χωρίς αναδρομικό έλεγχο για την ίδια συσκευή
-                            const duplicateCheck = this.checkForDuplicateIP(ifaceData.ip, ifaceData.subnetMask, device.id);
-                            if (duplicateCheck.hasDuplicate) {
-                                stillHasDuplicate = true;
-                                break;
-                            }
-                        }
-                    }
-                } else if (device.ip && device.ip !== 'N/A') {
-                    const duplicateCheck = this.checkForDuplicateIP(device.ip, device.subnetMask, device.id);
-                    stillHasDuplicate = duplicateCheck.hasDuplicate;
-                }
-                
-                // Αν δεν έχει πλέον διπλότυπο, αφαίρεση της ειδοποίησης
-                if (!stillHasDuplicate) {
-                    device.hasDuplicateIP = false;
-                    if (device.element) {
-                        device.element.style.border = '';
-                        device.element.style.boxShadow = '';
-                        device.element.classList.remove('duplicate-ip-warning');
-                        const warningIcon = device.element.querySelector('.duplicate-ip-icon');
-                        if (warningIcon) warningIcon.remove();
-                    }
-                }
-            }
-        });
-    }
+
     
     // Προσθήκη event listeners σε συσκευή
     addDeviceEventListeners(deviceEl, device) {
@@ -576,24 +441,13 @@ makeDeviceDraggable(deviceEl, device) {
         return this.devices.find(d => d.id === id);
     }
     
-    // Βρείτε συσκευή με βάση το IP - ΕΠΕΚΤΑΣΗ ΓΙΑ 2 LAN
+    // Χωρίς παρενέργειες: δεν αλλάζει το αντικείμενο της συσκευής
     getDeviceByIP(ip) {
-        if (!ip || ip === 'N/A' || ip === '0.0.0.0') return null;
-        
-        // Έλεγχος για routers πρώτα (έχουν πολλαπλές διεπαφές)
-        for (const device of this.devices) {
-            if (device.type === 'router') {
-                // Ελέγχουμε όλα τα interfaces
-                if (device.interfaces.wan.ip === ip) return device;
-                if (device.interfaces.lan.ip === ip) return device;
-                if (device.interfaces.lan1 && device.interfaces.lan1.ip === ip) return device;
-                if (device.interfaces.lan2 && device.interfaces.lan2.ip === ip) return device;
-            } else if (device.ip === ip) {
-                return device;
-            }
-        }
-        
-        return null;
+        if (!isValidIP(ip) || ip === '0.0.0.0') return null;
+        return this.devices.find(device => device.type === 'router'
+            ? Object.values(device.interfaces).some(iface => iface.ip === ip && iface.enabled !== false)
+            : device.ip === ip
+        ) ?? null;
     }
     
     // Βρείτε συσκευή με βάση το domain name
@@ -632,332 +486,113 @@ makeDeviceDraggable(deviceEl, device) {
     
     // ΑΠΛΗ ΣΥΝΑΡΤΗΣΗ ΕΛΕΓΧΟΥ IP - ΜΟΝΟ 0-255 ΤΑ BYTES
     simpleIPCheck(ip) {
-        if (!ip || ip === 'N/A' || ip === '0.0.0.0') {
-            return true; // Αυτές είναι αποδεκτές
-        }
-        
-        const parts = ip.split('.');
-        if (parts.length !== 4) return false;
-        
-        for (const part of parts) {
-            const num = parseInt(part, 10);
-            if (isNaN(num) || num < 0 || num > 255) {
-                return false;
-            }
-        }
-        
-        return true;
+        return !ip || ip === 'N/A' || isValidIP(ip);
     }
     
-    // ΑΠΛΗ ΣΥΝΑΡΤΗΣΗ ΕΛΕΓΧΟΥ SUBNET MASK
-    simpleSubnetCheck(mask) {
-        if (!mask || mask === '0.0.0.0') return false;
-        
-        // Κοινές μάσκες που είναι αποδεκτές
-        const validMasks = [
-            '255.255.255.0',
-            '255.255.0.0',
-            '255.0.0.0',
-            '255.255.255.128',
-            '255.255.255.192',
-            '255.255.255.224',
-            '255.255.255.240',
-            '255.255.255.248',
-            '255.255.255.252',
-            '255.255.255.254',
-            '255.255.255.255'
-        ];
-        
-        if (validMasks.includes(mask)) return true;
-        
-        // Αν δεν είναι κοινή, έλεγχος βασικών bytes
-        return this.simpleIPCheck(mask);
-    }
+
     
     // Ενημέρωση ρυθμίσεων συσκευής (ενιαία μέθοδος)
     updateDeviceConfig(device, configData) {
         try {
-            // Καθαρισμός προειδοποιήσεων πριν την ενημέρωση
-            this.cleanupDuplicateIPWarnings();
-            
-            if (device.type === 'router') {
-                return this.updateRouterConfig(device, configData);
-            } else {
-                return this.updateStandardDeviceConfig(device, configData);
-            }
+            return device.type === 'router'
+                ? this.updateRouterConfig(device, configData)
+                : this.updateStandardDeviceConfig(device, configData);
         } catch (error) {
             return { success: false, error: error.message };
         }
     }
     
-    // Ενημέρωση router - ΕΠΕΚΤΑΣΗ ΓΙΑ ΟΛΑ ΤΑ INTERFACES
+    // Πρώτα επικύρωση όλων, μετά εφαρμογή: ένα σφάλμα δεν αφήνει μισή ρύθμιση.
     updateRouterConfig(router, configData) {
-        const { 
-            wanIp, wanSubnet, wanGateway, wanDns, 
-            lanIp, lanSubnet, lanGateway, lanDns,
-            lan2Ip, lan2Subnet, lan2Gateway, lan2Dns, lan2Enabled 
-        } = configData;
-        
-        // Έλεγχος για διπλότυπη IP στα interfaces
-        const checkDuplicateIP = (newIP, subnet, interfaceType) => {
-            if (newIP && newIP !== 'N/A' && newIP !== '0.0.0.0') {
-                const duplicateCheck = this.checkForDuplicateIP(newIP, subnet || router.interfaces.wan.subnetMask, router.id);
-                if (duplicateCheck.hasDuplicate) {
-                    // Προσθήκη προειδοποιήσεων
-                    if (typeof window.addLog === 'function') {
-                        window.addLog(`Προσοχή: Το ${interfaceType} interface έχει διπλότυπη IP ${newIP}`, 'warning');
-                    }
-                }
-            }
+        const fields = {
+            wan: { ip: 'wanIp', subnetMask: 'wanSubnet', gateway: 'wanGateway', dns: 'wanDns' },
+            lan: { ip: 'lanIp', subnetMask: 'lanSubnet', gateway: 'lanGateway', dns: 'lanDns' },
+            lan2: { ip: 'lan2Ip', subnetMask: 'lan2Subnet', gateway: 'lan2Gateway', dns: 'lan2Dns' }
         };
-        
-        // Έλεγχος για κάθε interface
-        if (wanIp !== undefined && wanIp !== router.interfaces.wan.ip) {
-            checkDuplicateIP(wanIp, wanSubnet || router.interfaces.wan.subnetMask, 'WAN');
+
+        const next = {};
+        for (const [name, keys] of Object.entries(fields)) {
+            const current = router.interfaces[name];
+            const pick = (key, fallback) => configData[keys[key]] !== undefined ? configData[keys[key]] : fallback;
+            next[name] = {
+                ...current,
+                ip: pick('ip', current.ip),
+                subnetMask: pick('subnetMask', current.subnetMask),
+                gateway: pick('gateway', current.gateway) || '0.0.0.0',
+                dns: configData[keys.dns] === undefined ? current.dns : (configData[keys.dns] ? [configData[keys.dns]] : [])
+            };
         }
-        
-        if (lanIp !== undefined && lanIp !== router.interfaces.lan.ip) {
-            checkDuplicateIP(lanIp, lanSubnet || router.interfaces.lan.subnetMask, 'LAN');
+        if (configData.lan2Enabled !== undefined) next.lan2.enabled = configData.lan2Enabled;
+
+        const active = Object.entries(next).filter(([name, iface]) =>
+            iface.ip && iface.ip !== 'N/A' && !(name === 'lan2' && iface.enabled === false));
+
+        for (const [name, iface] of active) {
+            const error = this.validateInterfaceConfig(name.toUpperCase(), { ...iface, dns: iface.dns?.[0] });
+            if (error) throw new Error(error);
         }
-        
-        if (lan2Ip !== undefined && lan2Ip !== router.interfaces.lan2.ip) {
-            checkDuplicateIP(lan2Ip, lan2Subnet || router.interfaces.lan2.subnetMask, 'LAN2');
-        }
-        
-        // WAN Interface
-        if (wanIp !== undefined) {
-            if (wanIp && wanIp !== 'N/A') {
-                if (!this.simpleIPCheck(wanIp)) {
-                    throw new Error('Λάθος WAN IP: Κάθε αριθμός πρέπει να είναι 0-255 (π.χ. 192.168.1.1)');
-                }
-                router.interfaces.wan.ip = wanIp;
-            }
-        }
-        
-        if (wanSubnet !== undefined) {
-            if (wanSubnet) {
-                if (!this.simpleSubnetCheck(wanSubnet)) {
-                    throw new Error('Λάθος WAN Subnet: Μη έγκυρη μάσκα (π.χ. 255.255.255.0)');
-                }
-                router.interfaces.wan.subnetMask = wanSubnet;
-            }
-        }
-        
-        if (wanGateway !== undefined) {
-            if (wanGateway && wanGateway !== '0.0.0.0') {
-                if (!this.simpleIPCheck(wanGateway)) {
-                    throw new Error('Λάθος WAN Gateway: Κάθε αριθμός πρέπει να είναι 0-255');
-                }
-                router.interfaces.wan.gateway = wanGateway;
-            }
-        }
-        
-        if (wanDns !== undefined) {
-            if (wanDns && wanDns !== '0.0.0.0') {
-                if (!this.simpleIPCheck(wanDns)) {
-                    throw new Error('Λάθος WAN DNS: Κάθε αριθμός πρέπει να είναι 0-255');
-                }
-                router.interfaces.wan.dns = [wanDns];
-            }
-        }
-        
-        // LAN Interface - ΣΥΝΧΡΟΝΙΖΟΥΜΕ ΚΑΙ ΤΑ ΔΥΟ (lan και lan1)
-        if (lanIp !== undefined) {
-            if (lanIp && lanIp !== 'N/A') {
-                if (!this.simpleIPCheck(lanIp)) {
-                    throw new Error('Λάθος LAN IP: Κάθε αριθμός πρέπει να είναι 0-255 (π.χ. 192.168.1.1)');
-                }
-                router.interfaces.lan.ip = lanIp;
-                if (router.interfaces.lan1) {
-                    router.interfaces.lan1.ip = lanIp;
+
+        // Οι διεπαφές ενός router πρέπει να είναι σε διαφορετικά δίκτυα
+        for (let i = 0; i < active.length; i++) {
+            for (let j = i + 1; j < active.length; j++) {
+                const [nameA, a] = active[i];
+                const [nameB, b] = active[j];
+                if (isOnLink(b.ip, a.ip, a.subnetMask) || isOnLink(a.ip, b.ip, b.subnetMask)) {
+                    throw new Error(`${nameA.toUpperCase()} και ${nameB.toUpperCase()} επικαλύπτονται (${a.ip}/${a.subnetMask}, ${b.ip}/${b.subnetMask})`);
                 }
             }
         }
-        
-        if (lanSubnet !== undefined) {
-            if (lanSubnet) {
-                if (!this.simpleSubnetCheck(lanSubnet)) {
-                    throw new Error('Λάθος LAN Subnet: Μη έγκυρη μάσκα (π.χ. 255.255.255.0)');
-                }
-                router.interfaces.lan.subnetMask = lanSubnet;
-                if (router.interfaces.lan1) {
-                    router.interfaces.lan1.subnetMask = lanSubnet;
-                }
-            }
-        }
-        
-        if (lanGateway !== undefined) {
-            if (lanGateway && lanGateway !== '0.0.0.0') {
-                if (!this.simpleIPCheck(lanGateway)) {
-                    throw new Error('Λάθος LAN Gateway: Κάθε αριθμός πρέπει να είναι 0-255');
-                }
-                router.interfaces.lan.gateway = lanGateway;
-                if (router.interfaces.lan1) {
-                    router.interfaces.lan1.gateway = lanGateway;
-                }
-            }
-        }
-        
-        if (lanDns !== undefined) {
-            if (lanDns && lanDns !== '0.0.0.0') {
-                if (!this.simpleIPCheck(lanDns)) {
-                    throw new Error('Λάθος LAN DNS: Κάθε αριθμός πρέπει να είναι 0-255');
-                }
-                router.interfaces.lan.dns = [lanDns];
-                if (router.interfaces.lan1) {
-                    router.interfaces.lan1.dns = [lanDns];
-                }
-            }
-        }
-        
-        // LAN2 Interface
-        if (lan2Ip !== undefined && lan2Ip !== 'N/A') {
-            if (!this.simpleIPCheck(lan2Ip)) {
-                throw new Error('Λάθος LAN2 IP: Κάθε αριθμός πρέπει να είναι 0-255 (π.χ. 192.168.2.1)');
-            }
-            router.interfaces.lan2.ip = lan2Ip;
-        }
-        
-        if (lan2Subnet !== undefined) {
-            if (lan2Subnet) {
-                if (!this.simpleSubnetCheck(lan2Subnet)) {
-                    throw new Error('Λάθος LAN2 Subnet: Μη έγκυρη μάσκα (π.χ. 255.255.255.0)');
-                }
-                router.interfaces.lan2.subnetMask = lan2Subnet;
-            }
-        }
-        
-        if (lan2Gateway !== undefined) {
-            if (lan2Gateway && lan2Gateway !== '0.0.0.0') {
-                if (!this.simpleIPCheck(lan2Gateway)) {
-                    throw new Error('Λάθος LAN2 Gateway: Κάθε αριθμός πρέπει να είναι 0-255');
-                }
-                router.interfaces.lan2.gateway = lan2Gateway;
-            }
-        }
-        
-        if (lan2Dns !== undefined && lan2Dns !== '0.0.0.0') {
-            if (!this.simpleIPCheck(lan2Dns)) {
-                throw new Error('Λάθος LAN2 DNS: Κάθε αριθμός πρέπει να είναι 0-255');
-            }
-            router.interfaces.lan2.dns = [lan2Dns];
-        }
-        
-        if (lan2Enabled !== undefined) {
-            router.interfaces.lan2.enabled = lan2Enabled;
-        }
-        
-        // Ενημέρωση εμφάνισης
-        router.element.querySelector('.device-ip').innerHTML = 
+
+        Object.assign(router.interfaces.wan, next.wan);
+        Object.assign(router.interfaces.lan, next.lan);
+        Object.assign(router.interfaces.lan2, next.lan2);
+
+        router.element.querySelector('.device-ip').innerHTML =
             `WAN: ${router.interfaces.wan.ip}<br>` +
             `LAN: ${router.interfaces.lan.ip}<br>` +
             `LAN2: ${router.interfaces.lan2.ip}${router.interfaces.lan2.enabled ? '' : ' (ανενεργό)'}`;
-        
-        // Καθαρισμός προειδοποιήσεων μετά την ενημέρωση
-        this.cleanupDuplicateIPWarnings();
-        
+
+        window.connectionManager?.updateAllConnections(this.devices);
+        this.refreshDuplicateIPWarnings();
         return { success: true, router };
     }
     
     // Ενημέρωση τυπικής συσκευής - Προσθήκη έλεγχου για διπλότυπη IP
 updateStandardDeviceConfig(device, configData) {
-    const { ip, subnet, gateway, dns, domainName } = configData;
-    
-    // Ειδική περίπτωση για switches χωρίς IP
-    if (device.type === 'switch') {
-        if (ip === 'N/A' || ip === '' || !ip) {
-            device.ip = 'N/A';
-            device.subnetMask = '255.255.255.0';
-            device.gateway = '0.0.0.0';
-            device.dns = [];
-            device.hasDuplicateIP = false; // Προσθήκη
-            
-            if (device.element) {
-                device.element.querySelector('.device-ip').innerHTML = '<span class="no-ip">Χωρίς IP</span>';
-                device.element.querySelector('.device-ip').className = 'device-ip no-ip';
-                // Αφαίρεση προειδοποίησης
-                device.element.style.border = '';
-                device.element.style.boxShadow = '';
-                device.element.classList.remove('duplicate-ip-warning');
-                const warningIcon = device.element.querySelector('.duplicate-ip-icon');
-                if (warningIcon) warningIcon.remove();
+        const { ip, subnet, gateway, dns, domainName } = configData;
+        const ipLabel = device.element?.querySelector('.device-ip');
+
+        if (device.type === 'switch' && (!ip || ip === 'N/A')) {
+            Object.assign(device, { ip: 'N/A', subnetMask: '255.255.255.0', gateway: '0.0.0.0', dns: [] });
+            if (ipLabel) {
+                ipLabel.innerHTML = '<span class="no-ip">Χωρίς IP</span>';
+                ipLabel.className = 'device-ip no-ip';
             }
-            
-            return { success: true, device };
-        }
-    }
-    
-    // Έλεγχος για διπλότυπη IP ΜΟΝΟ αν αλλάζει IP
-    if (ip && ip !== 'N/A' && ip !== device.ip) {
-        // Έλεγχος διπλότυπης IP
-        const duplicateCheck = this.checkForDuplicateIP(ip, subnet || device.subnetMask, device.id);
-        if (duplicateCheck.hasDuplicate) {
-            // Η συσκευή ΜΟΝΟ ενημερώνεται - δεν λαμβάνει προειδοποίηση
-            device.hasDuplicateIP = false;
         } else {
-            device.hasDuplicateIP = false;
-            // Αφαίρεση προειδοποίησης αν υπάρχει (για αυτή τη συσκευή)
-            if (device.element) {
-                device.element.style.border = '';
-                device.element.style.boxShadow = '';
-                device.element.classList.remove('duplicate-ip-warning');
-                const warningIcon = device.element.querySelector('.duplicate-ip-icon');
-                if (warningIcon) warningIcon.remove();
+            const next = {
+                ip: ip || device.ip,
+                subnetMask: subnet || device.subnetMask,
+                gateway: gateway || '0.0.0.0',
+                dns: dns === undefined ? device.dns : (dns && dns !== '0.0.0.0' ? [dns] : [])
+            };
+            const error = this.validateInterfaceConfig(device.name, { ...next, dns: next.dns?.[0] });
+            if (error) throw new Error(error);
+
+            Object.assign(device, next);
+            if (ipLabel) {
+                ipLabel.textContent = device.ip;
+                ipLabel.className = 'device-ip';
+            }
+            if (domainName && domainName.trim() !== '') {
+                device.domainName = domainName.trim();
+                window.dnsManager?.addDNSRecord(device.domainName, device.ip);
             }
         }
-    }
-    
-    // ΑΠΛΟΣ ΕΛΕΓΧΟΣ IP
-    if (ip && ip !== 'N/A') {
-        if (!this.simpleIPCheck(ip)) {
-            throw new Error('Λάθος IP: Κάθε αριθμός πρέπει να είναι 0-255 (π.χ. 192.168.1.10)');
-        }
-        device.ip = ip;
-        
-        if (device.element) {
-            device.element.querySelector('.device-ip').textContent = ip;
-            device.element.querySelector('.device-ip').className = 'device-ip';
-        }
-    }
-    
-    // ΑΠΛΟΣ ΕΛΕΓΧΟΣ Subnet
-    if (subnet) {
-        if (!this.simpleSubnetCheck(subnet)) {
-            throw new Error('Λάθος Subnet: Μη έγκυρη μάσκα (π.χ. 255.255.255.0)');
-        }
-        device.subnetMask = subnet;
-    }
-    
-    // ΑΠΛΟΣ ΕΛΕΓΧΟΣ Gateway
-    if (gateway && gateway !== '0.0.0.0') {
-        if (!this.simpleIPCheck(gateway)) {
-            throw new Error('Λάθος Gateway: Κάθε αριθμός πρέπει να είναι 0-255');
-        }
-        device.gateway = gateway;
-    }
-    
-    // ΑΠΛΟΣ ΕΛΕΓΧΟΣ DNS
-    if (dns && dns !== '0.0.0.0') {
-        if (!this.simpleIPCheck(dns)) {
-            throw new Error('Λάθος DNS: Κάθε αριθμός πρέπει να είναι 0-255');
-        }
-        device.dns = [dns];
-    }
-    
-    if (domainName && domainName.trim() !== '') {
-        device.domainName = domainName;
-        
-        // Προσθήκη στο DNS manager
-        if (typeof window.dnsManager !== 'undefined' && device.ip && device.ip !== 'N/A') {
-            window.dnsManager.addDNSRecord(domainName, device.ip);
-        }
-    }
-    
-    // Καθαρισμός προειδοποιήσεων μετά την ενημέρωση
-    this.cleanupDuplicateIPWarnings();
-    
-    return { success: true, device };
-}    
+
+        window.connectionManager?.updateAllConnections(this.devices);
+        this.refreshDuplicateIPWarnings();
+        return { success: true, device };
+    }    
 // Βοηθητική συνάρτηση για ενημέρωση από UI
 updateDeviceConfigFromUI(device) {
     let configData = {};
@@ -1053,48 +688,139 @@ updateDeviceConfigFromUI(device) {
         return { success: false, error: error.message };
     }
 }    
-    // ΝΕΑ ΜΕΘΟΔΟΣ: Ανάθεση συσκευής σε LAN2
+    // Ανάθεση σε LAN2: σωστή για κάθε μάσκα, χωρίς κοινό array dns με τον router
     assignToLAN2(device) {
         if (device.type === 'router') return false;
-        
-        // Βρες router με LAN2
-        const router = this.devices.find(d => d.type === 'router');
-        if (!router || !router.interfaces.lan2 || !router.interfaces.lan2.enabled) {
-            return false;
-        }
-        
-        // Ορισμός IP στο δίκτυο LAN2
-        const lan2IP = router.interfaces.lan2.ip;
-        const subnetParts = lan2IP.split('.');
-        const baseNetwork = subnetParts.slice(0, 3).join('.');
-        
-        // Δημιουργία IP στο LAN2 (π.χ. 192.168.2.x)
-        let lastOctet = 10;
-        let attempts = 0;
-        
-        while (attempts < 100) {
-            const potentialIP = `${baseNetwork}.${lastOctet}`;
-            const existingDevice = this.getDeviceByIP(potentialIP);
-            
-            if (!existingDevice) {
-                device.ip = potentialIP;
-                device.subnetMask = router.interfaces.lan2.subnetMask;
-                device.gateway = router.interfaces.lan2.ip;
-                device.dns = router.interfaces.lan2.dns;
-                
-                // Ενημέρωση εμφάνισης
-                if (device.element) {
-                    device.element.querySelector('.device-ip').textContent = potentialIP;
-                }
-                
-                return true;
+        const router = this.devices.find(d => d.type === 'router' && d.interfaces.lan2?.enabled);
+        const lan2 = router?.interfaces.lan2;
+        if (!lan2 || !isValidIP(lan2.ip)) return false;
+
+        const ip = this.allocateHostIP(lan2.ip, lan2.subnetMask);
+        if (!ip) return false;
+
+        Object.assign(device, { ip, subnetMask: lan2.subnetMask, gateway: lan2.ip, dns: [...lan2.dns] });
+        const ipLabel = device.element?.querySelector('.device-ip');
+        if (ipLabel) ipLabel.textContent = ip;
+        return true;
+    }
+
+    // Όλες οι IP που χρησιμοποιούνται (hosts και διεπαφές routers)
+    getUsedIPs() {
+        return this.devices.flatMap(device => device.type === 'router'
+            ? Object.values(device.interfaces).map(iface => iface.ip)
+            : [device.ip]
+        ).filter(isValidIP);
+    }
+
+    // Ελεύθερη διεύθυνση host στο δίκτυο της διεπαφής (εξαιρεί network/broadcast/κατειλημμένες)
+    allocateHostIP(interfaceIP, subnetMask) {
+        return generateRandomIP(interfaceIP, subnetMask, this.getUsedIPs());
+    }
+
+    // Η ανίχνευση γίνεται στην τοπολογία (ίδιο broadcast domain). Εδώ μόνο η εμφάνιση,
+    // μέσω CSS κλάσης, χωρίς inline styles που μετά πρέπει να «επαναφερθούν».
+    // style.css: .duplicate-ip-warning { border-color: #ffcc00 !important; ... }
+    //            .duplicate-ip-icon { position: absolute; top: -10px; right: -10px; font-size: 20px; z-index: 100; }
+    refreshDuplicateIPWarnings() {
+        const conflicting = window.connectionManager?.findIPConflicts() ?? new Set();
+
+        this.devices.forEach(device => {
+            const wasFlagged = device.hasDuplicateIP;
+            device.hasDuplicateIP = conflicting.has(device);
+            if (device.hasDuplicateIP && !wasFlagged) {
+                window.addLog?.(`ΠΡΟΣΟΧΗ: η ${device.name} έχει διπλότυπη IP στο ίδιο δίκτυο`, 'warning');
             }
-            
-            lastOctet++;
-            attempts++;
+
+            const el = device.element;
+            if (!el) return;
+            el.classList.toggle('duplicate-ip-warning', device.hasDuplicateIP);
+            const icon = el.querySelector('.duplicate-ip-icon');
+            if (device.hasDuplicateIP && !icon) {
+                const warningIcon = document.createElement('div');
+                warningIcon.className = 'duplicate-ip-icon';
+                warningIcon.textContent = '⚠️';
+                el.appendChild(warningIcon);
+            } else if (!device.hasDuplicateIP && icon) {
+                icon.remove();
+            }
+        });
+    }
+
+    // Επικύρωση ρυθμίσεων μιας διεπαφής. Επιστρέφει μήνυμα σφάλματος ή null.
+    // Κενό/0.0.0.0 gateway σημαίνει «χωρίς gateway» και επιτρέπεται.
+    validateInterfaceConfig(label, { ip, subnetMask, gateway, dns }) {
+        if (!isValidIP(ip)) return `${label}: μη έγκυρη IP (${ip})`;
+        if (!isValidSubnetMask(subnetMask)) return `${label}: μη έγκυρη μάσκα (${subnetMask}), π.χ. 255.255.255.0`;
+        if (!isUsableHostAddress(ip, subnetMask)) return `${label}: η ${ip} είναι διεύθυνση δικτύου ή broadcast για ${subnetMask}`;
+        if (gateway && gateway !== '0.0.0.0') {
+            if (!isValidIP(gateway)) return `${label}: μη έγκυρο gateway (${gateway})`;
+            if (!isOnLink(gateway, ip, subnetMask)) return `${label}: το gateway ${gateway} δεν ανήκει στο δίκτυο ${ip}/${subnetMask}`;
+            if (gateway === ip) return `${label}: το gateway δεν μπορεί να είναι η ίδια η συσκευή`;
         }
-        
-        return false;
+        if (dns && dns !== '0.0.0.0' && !isValidIP(dns)) return `${label}: μη έγκυρος DNS (${dns})`;
+        return null;
+    }
+
+    // Στατική διαδρομή: το δίκτυο κανονικοποιείται στη διεύθυνση δικτύου, το gateway πρέπει να είναι
+    // on-link στη διεπαφή που επιλέχθηκε (ή 0.0.0.0 για απευθείας συνδεδεμένο δίκτυο).
+    addRoute(router, { network, mask, gateway, interface: iface, metric = 1 }) {
+        const ifaceConfig = router.interfaces[iface];
+        if (!ifaceConfig) throw new Error(`Άγνωστη διεπαφή: ${iface}`);
+        if (!isValidIP(network)) throw new Error(`Μη έγκυρο δίκτυο: ${network}`);
+        if (!isValidSubnetMask(mask, { allowZero: true })) throw new Error(`Μη έγκυρη μάσκα: ${mask}`);
+        const nextHop = gateway || '0.0.0.0';
+        if (nextHop !== '0.0.0.0') {
+            if (!isValidIP(nextHop)) throw new Error(`Μη έγκυρο gateway: ${nextHop}`);
+            if (!isOnLink(nextHop, ifaceConfig.ip, ifaceConfig.subnetMask)) {
+                throw new Error(`Το gateway ${nextHop} δεν ανήκει στο δίκτυο της ${iface.toUpperCase()} (${ifaceConfig.ip}/${ifaceConfig.subnetMask})`);
+            }
+        }
+
+        const route = { network: getNetworkAddress(network, mask), mask, gateway: nextHop, interface: iface, metric: Number(metric) || 1 };
+        router.routingTable ??= [];
+        if (router.routingTable.some(r => r.network === route.network && r.mask === route.mask && r.gateway === route.gateway)) {
+            throw new Error('Η διαδρομή υπάρχει ήδη');
+        }
+        router.routingTable.push(route);
+        window.connectionManager?.updateAllConnections(this.devices);
+        return route;
+    }
+
+    removeRoute(router, index) {
+        const [removed] = router.routingTable.splice(index, 1);
+        window.connectionManager?.updateAllConnections(this.devices);
+        return removed;
+    }
+
+    updateFirewallPolicy(firewall, direction, action) {
+        if (!['outbound', 'inbound'].includes(direction) || !['allow', 'deny'].includes(action)) {
+            throw new Error('Μη έγκυρη πολιτική');
+        }
+        firewall.firewall.policy[direction] = action;
+        window.connectionManager?.updateAllConnections(this.devices);
+    }
+
+    addFirewallRule(firewall, values) {
+        const rule = createRule(values);
+        const error = validateRule(rule);
+        if (error) throw new Error(error);
+        firewall.firewall.rules.push(rule);
+        window.connectionManager?.updateAllConnections(this.devices);
+        return rule;
+    }
+
+    removeFirewallRule(firewall, index) {
+        const [removed] = firewall.firewall.rules.splice(index, 1);
+        window.connectionManager?.updateAllConnections(this.devices);
+        return removed;
+    }
+
+    // Η σειρά μετράει: ο πρώτος κανόνας που ταιριάζει αποφασίζει
+    moveFirewallRuleUp(firewall, index) {
+        const rules = firewall.firewall.rules;
+        if (index <= 0 || index >= rules.length) return;
+        [rules[index - 1], rules[index]] = [rules[index], rules[index - 1]];
+        window.connectionManager?.updateAllConnections(this.devices);
     }
 }
 

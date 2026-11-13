@@ -1,0 +1,14 @@
+{
+  "name": "diktio",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test",
+    "test:scenarios": "node tests/integration/scenarios.mjs",
+    "test:smoke": "node tests/integration/smoke.mjs",
+    "test:ui": "node tests/integration/ui.mjs"
+  },
+  "devDependencies": {
+    "jsdom": "^24.1.3"
+  }
+}

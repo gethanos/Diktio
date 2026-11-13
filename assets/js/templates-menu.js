@@ -26,7 +26,9 @@ class ModelsLoader {
         this.models = [
             { name: "Απλό LAN", file: "Simple_Lan.json", icon: "🏠", color: "#2ecc71" },
             { name: "2 Υποδίκτυα -> 1 Switch", file: "2_subnets_switch.json", icon: "🌐", color: "#3498db" },
-            { name: "Πλήρες LAN -> WAN", file: "Office_with_2_Subnets_a_Router_Internet.json", icon: "🔗", color: "#9b59b6" }
+            { name: "Πλήρες LAN -> WAN", file: "Office_with_2_Subnets_a_Router_Internet.json", icon: "🔗", color: "#9b59b6" },
+            { name: "Δύο γραφεία, στατική δρομολόγηση", file: "Two_Offices_Static_Routing.json", icon: "🏢", color: "#f39c12" },
+            { name: "Firewall που προστατεύει server", file: "Firewall_Protected_Server.json", icon: "🛡️", color: "#e74c3c" }
         ];
         
         this.currentModal = null;
@@ -492,9 +494,10 @@ class ModelsLoader {
                 const blob = new Blob([jsonString], { type: 'application/json' });
                 const file = new File([blob], filename, { type: 'application/json' });
                 
-                await window.workspaceManager.loadFromFile({
+                const loaded = await window.workspaceManager.loadFromFile({
                     target: { files: [file] }
                 });
+                if (!loaded) return;
                 
                 console.log(`✅ Επιτυχής φόρτωση: ${filename}`);
                 

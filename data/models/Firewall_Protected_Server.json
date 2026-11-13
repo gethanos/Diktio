@@ -1,0 +1,294 @@
+{
+  "metadata": {
+    "name": "Firewall που προστατεύει server",
+    "exportDate": "2026-11-13T13:31:29.602Z",
+    "version": "2.0",
+    "app": "Network Simulator",
+    "deviceCount": 9,
+    "connectionCount": 8
+  },
+  "devices": [
+    {
+      "id": "device-1",
+      "type": "router",
+      "name": "Router",
+      "x": 480,
+      "y": 260,
+      "color": "#3498db",
+      "status": "online",
+      "interfaces": {
+        "wan": {
+          "ip": "203.0.113.10",
+          "subnetMask": "255.255.255.0",
+          "gateway": "203.0.113.1",
+          "dns": [
+            "8.8.8.8"
+          ]
+        },
+        "lan": {
+          "ip": "192.168.1.1",
+          "subnetMask": "255.255.255.0",
+          "gateway": "0.0.0.0",
+          "dns": [
+            "192.168.2.53"
+          ]
+        },
+        "lan2": {
+          "ip": "192.168.2.1",
+          "subnetMask": "255.255.255.0",
+          "gateway": "0.0.0.0",
+          "dns": [
+            "192.168.2.53"
+          ],
+          "enabled": true
+        }
+      },
+      "routingTable": [],
+      "connectionInterfaces": {
+        "conn_1794576689593_d5q6yd1o2": "wan",
+        "conn_1794576689594_e4p8w4kq9": "lan",
+        "conn_1794576689594_5na4cghlc": "lan2"
+      },
+      "connections": [
+        "conn_1794576689593_d5q6yd1o2",
+        "conn_1794576689594_e4p8w4kq9",
+        "conn_1794576689594_5na4cghlc"
+      ]
+    },
+    {
+      "id": "device-2",
+      "type": "cloud",
+      "name": "Internet",
+      "x": 480,
+      "y": 40,
+      "color": "#f39c12",
+      "ip": "203.0.113.1",
+      "subnetMask": "255.255.255.0",
+      "gateway": "0.0.0.0",
+      "dns": [
+        "8.8.8.8"
+      ],
+      "status": "online",
+      "connectionInterfaces": {},
+      "connections": [
+        "conn_1794576689593_d5q6yd1o2"
+      ]
+    },
+    {
+      "id": "device-3",
+      "type": "switch",
+      "name": "Switch Γραφείου",
+      "x": 180,
+      "y": 260,
+      "color": "#2ecc71",
+      "ip": "N/A",
+      "subnetMask": "255.255.255.0",
+      "gateway": "0.0.0.0",
+      "dns": [],
+      "status": "online",
+      "connectionInterfaces": {},
+      "connections": [
+        "conn_1794576689594_e4p8w4kq9",
+        "conn_1794576689594_wlwswuzok",
+        "conn_1794576689594_si9arnfo5"
+      ]
+    },
+    {
+      "id": "device-4",
+      "type": "computer",
+      "name": "Υπολογιστής 1",
+      "x": 40,
+      "y": 120,
+      "color": "#e74c3c",
+      "ip": "192.168.1.10",
+      "subnetMask": "255.255.255.0",
+      "gateway": "192.168.1.1",
+      "dns": [
+        "192.168.2.53"
+      ],
+      "domainName": null,
+      "status": "online",
+      "connectionInterfaces": {},
+      "connections": [
+        "conn_1794576689594_wlwswuzok"
+      ]
+    },
+    {
+      "id": "device-5",
+      "type": "computer",
+      "name": "Υπολογιστής 2",
+      "x": 40,
+      "y": 400,
+      "color": "#e74c3c",
+      "ip": "192.168.1.11",
+      "subnetMask": "255.255.255.0",
+      "gateway": "192.168.1.1",
+      "dns": [
+        "192.168.2.53"
+      ],
+      "domainName": null,
+      "status": "online",
+      "connectionInterfaces": {},
+      "connections": [
+        "conn_1794576689594_si9arnfo5"
+      ]
+    },
+    {
+      "id": "device-6",
+      "type": "firewall",
+      "name": "Firewall",
+      "x": 780,
+      "y": 260,
+      "color": "#e74c3c",
+      "ip": "192.168.2.254",
+      "subnetMask": "255.255.255.0",
+      "gateway": "192.168.2.1",
+      "dns": [
+        "192.168.2.53"
+      ],
+      "domainName": null,
+      "status": "online",
+      "connectionInterfaces": {
+        "conn_1794576689594_5na4cghlc": "outside",
+        "conn_1794576689595_ecas71cox": "inside"
+      },
+      "firewall": {
+        "policy": {
+          "outbound": "allow",
+          "inbound": "deny"
+        },
+        "rules": [
+          {
+            "action": "allow",
+            "direction": "inbound",
+            "protocol": "tcp",
+            "port": 80,
+            "source": "any",
+            "destination": "192.168.2.10"
+          },
+          {
+            "action": "allow",
+            "direction": "inbound",
+            "protocol": "udp",
+            "port": 53,
+            "source": "any",
+            "destination": "192.168.2.53"
+          }
+        ]
+      },
+      "connections": [
+        "conn_1794576689594_5na4cghlc",
+        "conn_1794576689595_ecas71cox"
+      ]
+    },
+    {
+      "id": "device-7",
+      "type": "switch",
+      "name": "Switch Servers",
+      "x": 1060,
+      "y": 260,
+      "color": "#2ecc71",
+      "ip": "N/A",
+      "subnetMask": "255.255.255.0",
+      "gateway": "0.0.0.0",
+      "dns": [],
+      "status": "online",
+      "connectionInterfaces": {},
+      "connections": [
+        "conn_1794576689595_ecas71cox",
+        "conn_1794576689595_vr9pomycf",
+        "conn_1794576689595_szf9uzobk"
+      ]
+    },
+    {
+      "id": "device-8",
+      "type": "server",
+      "name": "Web Server",
+      "x": 1300,
+      "y": 120,
+      "color": "#9b59b6",
+      "ip": "192.168.2.10",
+      "subnetMask": "255.255.255.0",
+      "gateway": "192.168.2.1",
+      "dns": [
+        "192.168.2.53"
+      ],
+      "domainName": "www.lab.local",
+      "status": "online",
+      "connectionInterfaces": {},
+      "connections": [
+        "conn_1794576689595_vr9pomycf"
+      ]
+    },
+    {
+      "id": "device-9",
+      "type": "dns",
+      "name": "DNS Server",
+      "x": 1300,
+      "y": 400,
+      "color": "#9b59b6",
+      "ip": "192.168.2.53",
+      "subnetMask": "255.255.255.0",
+      "gateway": "192.168.2.1",
+      "dns": [
+        "192.168.2.53"
+      ],
+      "status": "online",
+      "connectionInterfaces": {},
+      "connections": [
+        "conn_1794576689595_szf9uzobk"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "conn_1794576689593_d5q6yd1o2",
+      "device1Id": "device-1",
+      "device2Id": "device-2",
+      "interface1": "wan"
+    },
+    {
+      "id": "conn_1794576689594_e4p8w4kq9",
+      "device1Id": "device-1",
+      "device2Id": "device-3",
+      "interface1": "lan"
+    },
+    {
+      "id": "conn_1794576689594_wlwswuzok",
+      "device1Id": "device-4",
+      "device2Id": "device-3"
+    },
+    {
+      "id": "conn_1794576689594_si9arnfo5",
+      "device1Id": "device-5",
+      "device2Id": "device-3"
+    },
+    {
+      "id": "conn_1794576689594_5na4cghlc",
+      "device1Id": "device-1",
+      "device2Id": "device-6",
+      "interface1": "lan2",
+      "interface2": "outside"
+    },
+    {
+      "id": "conn_1794576689595_ecas71cox",
+      "device1Id": "device-6",
+      "device2Id": "device-7",
+      "interface1": "inside"
+    },
+    {
+      "id": "conn_1794576689595_vr9pomycf",
+      "device1Id": "device-8",
+      "device2Id": "device-7"
+    },
+    {
+      "id": "conn_1794576689595_szf9uzobk",
+      "device1Id": "device-9",
+      "device2Id": "device-7"
+    }
+  ],
+  "dnsRecords": {
+    "www.lab.local": "192.168.2.10",
+    "dns.lab.local": "192.168.2.53"
+  }
+}
