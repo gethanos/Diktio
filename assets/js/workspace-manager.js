@@ -368,9 +368,7 @@ class WorkspaceManager {
         return { ...deviceData, interfaces };
     }
 
-    // Κοινή διαδρομή επαναφοράς για αρχείο, πρότυπα και main.js createPredefinedWan/Lan:
-    //   const { data, warnings } = window.workspaceManager.validateWorkspace(jsonData);
-    //   window.workspaceManager.applyWorkspace(data, warnings);
+    // Κοινή διαδρομή επαναφοράς για ήδη ελεγμένα δεδομένα (από validateWorkspace)
     applyWorkspace(data, warnings = []) {
         const { deviceManager, connectionManager, dnsManager, uiManager } = this.simulator;
 

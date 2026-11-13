@@ -23,14 +23,8 @@
  */
 class ModelsLoader {
     constructor() {
-        this.models = [
-            { name: "Απλό LAN", file: "Simple_Lan.json", icon: "🏠", color: "#2ecc71" },
-            { name: "2 Υποδίκτυα -> 1 Switch", file: "2_subnets_switch.json", icon: "🌐", color: "#3498db" },
-            { name: "Πλήρες LAN -> WAN", file: "Office_with_2_Subnets_a_Router_Internet.json", icon: "🔗", color: "#9b59b6" },
-            { name: "Δύο γραφεία, στατική δρομολόγηση", file: "Two_Offices_Static_Routing.json", icon: "🏢", color: "#f39c12" },
-            { name: "Firewall που προστατεύει server", file: "Firewall_Protected_Server.json", icon: "🛡️", color: "#e74c3c" }
-        ];
-        
+        // Ο κατάλογος των μοντέλων είναι το data/models/list.json: νέο μοντέλο = αρχείο JSON + μία εγγραφή εκεί
+        this.models = null;
         this.currentModal = null;
         this.setupMoreButton();
         this.setupThemeListener();
@@ -145,7 +139,24 @@ class ModelsLoader {
         }
     }
 
-    showModal() {
+    async loadModelList() {
+        if (!this.models) {
+            const response = await fetch('data/models/list.json');
+            if (!response.ok) throw new Error('Ο κατάλογος μοντέλων (data/models/list.json) δεν βρέθηκε');
+            this.models = await response.json();
+        }
+        return this.models;
+    }
+
+    async showModal() {
+        let models;
+        try {
+            models = await this.loadModelList();
+        } catch (error) {
+            window.addToConsole?.(`Σφάλμα: ${error.message}`, 'error');
+            return;
+        }
+
         if (this.currentModal) {
             this.currentModal.remove();
         }
@@ -216,7 +227,7 @@ class ModelsLoader {
                         padding: 20px;
                         overflow-y: auto;
                     ">
-                        ${this.models.map(model => `
+                        ${models.map(model => `
                             <div class="model-item" data-file="${model.file}" style="
                                 display: flex;
                                 align-items: center;
@@ -237,7 +248,14 @@ class ModelsLoader {
                                     flex: 1;
                                     font-weight: 500;
                                     font-size: 1rem;
-                                ">${model.name}</span>
+                                ">${model.name}${model.description ? `
+                                    <span class="model-description" style="
+                                        display: block;
+                                        font-weight: 400;
+                                        font-size: 0.8rem;
+                                        color: ${colors.textSecondary};
+                                        margin-top: 3px;
+                                    ">${model.description}</span>` : ''}</span>
                                 <button class="model-load-btn" data-file="${model.file}" style="
                                     background: ${model.color};
                                     color: white;

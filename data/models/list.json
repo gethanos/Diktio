@@ -1,32 +1,98 @@
 [
     {
         "name": "Απλό LAN",
-        "file": "simple-lan.json",
-        "description": "Βασικό τοπικό δίκτυο για εκμάθηση",
+        "file": "Simple_Lan.json",
+        "description": "Ένα switch με υπολογιστή, server, DNS και εκτυπωτή στο ίδιο δίκτυο, χωρίς router",
+        "devices": 5,
+        "connections": 4,
+        "type": "lan",
+        "icon": "🏠",
+        "color": "#2ecc71",
+        "author": "CITEd.gr",
+        "version": "1.2"
+    },
+    {
+        "name": "2 Υποδίκτυα σε 1 Switch",
+        "file": "2_subnets_switch.json",
+        "description": "Δύο υποδίκτυα στο ίδιο switch χωρίς router: επικοινωνούν μόνο οι συσκευές του ίδιου υποδικτύου",
+        "devices": 7,
+        "connections": 6,
+        "type": "subnetting",
+        "icon": "🌐",
+        "color": "#3498db",
+        "author": "CITEd.gr",
+        "version": "1.2"
+    },
+    {
+        "name": "LAN με router",
+        "file": "predefined-lan.json",
+        "description": "Router, switch, υπολογιστής, server και DNS server σε ένα LAN",
+        "devices": 5,
+        "connections": 4,
+        "type": "lan",
+        "icon": "🖧",
+        "color": "#27ae60",
+        "author": "CITEd.gr",
+        "version": "1.2"
+    },
+    {
+        "name": "Απλό WAN Δίκτυο",
+        "file": "simple-wan.json",
+        "description": "Υπολογιστής, switch και router με σύνδεση στο Internet: το μικρότερο παράδειγμα NAT",
         "devices": 4,
         "connections": 3,
-        "type": "lan",
-        "author": "CITEd.gr",
-        "version": "1.0"
-    },
-    {
-        "name": "WAN Δίκτυο",
-        "file": "wan-network.json",
-        "description": "Δίκτυο ευρείας περιοχής με πολλαπλά routers",
-        "devices": 6,
-        "connections": 7,
         "type": "wan",
+        "icon": "🌍",
+        "color": "#16a085",
         "author": "CITEd.gr",
-        "version": "1.0"
+        "version": "1.2"
     },
     {
-        "name": "Εργαστήριο DNS",
-        "file": "dns-lab.json",
-        "description": "Εκπαιδευτικό εργαστήριο για DNS queries",
-        "devices": 5,
+        "name": "LAN με router και Internet",
+        "file": "predefined-wan.json",
+        "description": "Το LAN με router συνδεδεμένο στο Internet μέσω WAN (NAT)",
+        "devices": 6,
         "connections": 5,
-        "type": "dns",
-        "author": "CITEd.gr", 
-        "version": "1.1"
+        "type": "wan",
+        "icon": "☁️",
+        "color": "#00bcd4",
+        "author": "CITEd.gr",
+        "version": "1.2"
+    },
+    {
+        "name": "Γραφείο με 2 LAN και Internet",
+        "file": "Office_with_2_Subnets_a_Router_Internet.json",
+        "description": "Router με δύο LAN υποδίκτυα και σύνδεση στο Internet",
+        "devices": 10,
+        "connections": 9,
+        "type": "wan",
+        "icon": "🔗",
+        "color": "#9b59b6",
+        "author": "CITEd.gr",
+        "version": "1.2"
+    },
+    {
+        "name": "Δύο γραφεία, στατική δρομολόγηση",
+        "file": "Two_Offices_Static_Routing.json",
+        "description": "Δύο routers σε σύνδεση 10.0.0.0/30 με στατικές διαδρομές προς τις δύο κατευθύνσεις",
+        "devices": 8,
+        "connections": 7,
+        "type": "routing",
+        "icon": "🏢",
+        "color": "#f39c12",
+        "author": "CITEd.gr",
+        "version": "1.2"
+    },
+    {
+        "name": "Firewall που προστατεύει server",
+        "file": "Firewall_Protected_Server.json",
+        "description": "Web και DNS server πίσω από firewall που επιτρέπει μόνο HTTP (tcp/80) και DNS (udp/53)",
+        "devices": 9,
+        "connections": 8,
+        "type": "firewall",
+        "icon": "🛡️",
+        "color": "#e74c3c",
+        "author": "CITEd.gr",
+        "version": "1.2"
     }
 ]

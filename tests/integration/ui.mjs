@@ -1,5 +1,7 @@
 // Δοκιμές UI σε jsdom: όλη η εφαρμογή, κλικ σε όλα τα βασικά στοιχεία και έλεγχος αποτελεσμάτων.
 // Εκτέλεση: node tests/integration/ui.mjs [repo-dir]   (απαιτεί: npm install)
+import fs from 'node:fs';
+import path from 'node:path';
 import { bootApp } from './app.mjs';
 
 const dir = process.argv[2] ?? '.';
@@ -95,9 +97,11 @@ d.querySelector('.dns-record-delete-btn[data-domain="test.local"]').click(); awa
 check('DNS record delete button removes the record', undefined, w.dnsManager.globalDnsRecords['test.local']);
 
 // 8. Μοντέλα από το μενού
-click('loadModelBtn'); await tick(100);
+click('loadModelBtn'); await tick(300);
 const models = new Set([...d.querySelectorAll('.model-item[data-file]')].map(item => item.dataset.file));
-check('templates menu lists 5 models', 5, models.size);
+const catalogue = JSON.parse(fs.readFileSync(path.join(dir, 'data/models/list.json'), 'utf8'));
+check('models menu lists every entry of list.json', catalogue.length, models.size);
+check('models menu shows descriptions', catalogue.length, d.querySelectorAll('.model-description').length);
 
 check('no uncaught errors or console.error', '', errors.join('\n'));
 
