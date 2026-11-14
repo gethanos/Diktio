@@ -574,7 +574,9 @@ updateStandardDeviceConfig(device, configData) {
                 gateway: gateway || '0.0.0.0',
                 dns: dns === undefined ? device.dns : (dns && dns !== '0.0.0.0' ? [dns] : [])
             };
-            const error = this.validateInterfaceConfig(device.name, { ...next, dns: next.dns?.[0] });
+            const domain = domainName?.trim();
+            const error = this.validateInterfaceConfig(device.name, { ...next, dns: next.dns?.[0] }) ??
+                (domain && !isValidHostname(domain) ? `Μη έγκυρο domain name: ${domain} (γράμματα, ψηφία, '-' και '.')` : null);
             if (error) throw new Error(error);
 
             Object.assign(device, next);
@@ -582,9 +584,9 @@ updateStandardDeviceConfig(device, configData) {
                 ipLabel.textContent = device.ip;
                 ipLabel.className = 'device-ip';
             }
-            if (domainName && domainName.trim() !== '') {
-                device.domainName = domainName.trim();
-                window.dnsManager?.addDNSRecord(device.domainName, device.ip);
+            if (domain) {
+                window.dnsManager?.addDNSRecord(domain, device.ip);
+                device.domainName = domain;
             }
         }
 
@@ -829,11 +831,20 @@ updateDeviceConfigFromUI(device) {
         const isAddress = value => value === 'N/A' || isValidIP(value);
         const isOptionalIP = value => value === undefined || value === '' || isValidIP(value);
         const isIPList = value => value === undefined || (Array.isArray(value) && value.every(isValidIP));
+        // Η μάσκα εμφανίζεται στο panel ακόμη και χωρίς IP, άρα ελέγχεται πάντα όταν υπάρχει
+        const isMask = (value, ip) => value === undefined ? !isValidIP(ip) : isValidSubnetMask(value);
+        const isId = value => typeof value === 'string' && /^[\w.-]{1,64}$/.test(value);
 
         if (typeof device.name !== 'string' || !/^[^<>"'`]{1,64}$/.test(device.name)) {
             return 'μη έγκυρο όνομα (1-64 χαρακτήρες, χωρίς < > " \' `)';
         }
-        if (!(device.connections ?? []).every(id => typeof id === 'string')) return 'μη έγκυρη λίστα συνδέσεων';
+        if (!isId(device.id)) return 'μη έγκυρο id';
+        if (!(device.connections ?? []).every(isId) || !Object.keys(device.connectionInterfaces ?? {}).every(isId)) {
+            return 'μη έγκυρη λίστα συνδέσεων';
+        }
+        if ((device.x !== undefined && !Number.isFinite(device.x)) || (device.y !== undefined && !Number.isFinite(device.y))) {
+            return 'μη έγκυρη θέση';
+        }
         if (!Object.values(device.connectionInterfaces ?? {}).every(port => (ports[device.type] ?? []).includes(port))) {
             return 'μη έγκυρη διεπαφή σύνδεσης';
         }
@@ -841,7 +852,7 @@ updateDeviceConfigFromUI(device) {
         if (device.type === 'router') {
             for (const [name, iface] of Object.entries(device.interfaces ?? {})) {
                 if (!ports.router.includes(name)) return `άγνωστη διεπαφή ${String(name).slice(0, 20)}`;
-                if (!isAddress(iface?.ip) || (isValidIP(iface.ip) && !isValidSubnetMask(iface.subnetMask)) ||
+                if (!isAddress(iface?.ip) || !isMask(iface.subnetMask, iface.ip) ||
                     !isOptionalIP(iface.gateway) || !isIPList(iface.dns) ||
                     (iface.enabled !== undefined && typeof iface.enabled !== 'boolean')) {
                     return `μη έγκυρες ρυθμίσεις διεπαφής ${name.toUpperCase()}`;
@@ -854,7 +865,7 @@ updateDeviceConfigFromUI(device) {
             return routesValid ? null : 'μη έγκυρη διαδρομή στον πίνακα δρομολόγησης';
         }
 
-        if (!isAddress(device.ip ?? 'N/A') || (isValidIP(device.ip) && !isValidSubnetMask(device.subnetMask)) ||
+        if (!isAddress(device.ip ?? 'N/A') || !isMask(device.subnetMask, device.ip) ||
             !isOptionalIP(device.gateway) || !isIPList(device.dns)) {
             return 'μη έγκυρη IP, μάσκα, gateway ή DNS';
         }

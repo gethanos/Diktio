@@ -304,11 +304,9 @@ class DNSManager {
             throw new Error('Η συσκευή πρέπει να έχει έγκυρη διεύθυνση IP');
         }
         
-        // Ενημέρωση συσκευής
-        device.domainName = domain;
-        
-        // Εγγραφή στο DNS
+        // Πρώτα η εγγραφή στο DNS (ελέγχει το όνομα), μετά η συσκευή
         this.addDNSRecord(domain, device.ip);
+        device.domainName = domain;
         
         return { domain, ip: device.ip };
     }

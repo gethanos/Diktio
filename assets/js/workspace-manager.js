@@ -350,8 +350,8 @@ class WorkspaceManager {
         const warnings = [];
         const connectionIds = new Set();
         const connections = (data.connections || []).filter(conn => {
-            if (!conn || typeof conn.id !== 'string' || connectionIds.has(conn.id)) {
-                throw new Error('Μη έγκυρο αρχείο: σύνδεση χωρίς id ή με διπλότυπο id');
+            if (!conn || typeof conn.id !== 'string' || !/^[\w.-]{1,64}$/.test(conn.id) || connectionIds.has(conn.id)) {
+                throw new Error('Μη έγκυρο αρχείο: σύνδεση με άκυρο ή διπλότυπο id');
             }
             connectionIds.add(conn.id);
             if (ids.has(conn.device1Id) && ids.has(conn.device2Id)) return true;

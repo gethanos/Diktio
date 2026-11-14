@@ -333,7 +333,10 @@ await scenario('V1 invalid nested data is rejected before the workspace is clear
     'device name with markup': { devices: [pcData({ name: '<img src=x onerror=alert(1)>' })] },
     'firewall rule with markup': { devices: [{ ...pcData({ type: 'firewall', name: 'FW' }), firewall: { policy: { outbound: 'allow', inbound: 'deny' }, rules: [{ action: 'allow', direction: 'any', protocol: 'any', port: null, source: '<b>', destination: 'any' }] } }] },
     'DNS record with markup': { devices: [pcData()], dnsRecords: { '<script>': '1.2.3.4' } },
-    'interface IP not an address': { devices: [routerData({ interfaces: { wan: { ip: 'x' }, lan: { ip: '192.168.1.1', subnetMask: '255.255.255.0' } } })] }
+    'interface IP not an address': { devices: [routerData({ interfaces: { wan: { ip: 'x' }, lan: { ip: '192.168.1.1', subnetMask: '255.255.255.0' } } })] },
+    'mask with markup on an interface without IP': { devices: [routerData({ interfaces: { wan: { ip: 'N/A', subnetMask: '"><img src=x onerror=alert(1)>' }, lan: { ip: '192.168.1.1', subnetMask: '255.255.255.0' } } })] },
+    'mask with markup on a device without IP': { devices: [pcData({ ip: 'N/A', subnetMask: '"><img src=x onerror=alert(1)>' })] },
+    'connection id with markup': { devices: [pcData({ connections: ['"><b>'] }), pcData({ id: 'device-3', connections: ['"><b>'] })], connections: [{ id: '"><b>', device1Id: 'device-2', device2Id: 'device-3' }] }
   };
   for (const [name, file] of Object.entries(attempts)) {
     t(`${name}: rejected`, false, await load(file));
@@ -367,6 +370,13 @@ await scenario('V4 typed IP must belong to an active L3 interface', async ({ hos
   fix(b, { subnetMask: 'not-a-mask' });
   globalThis.prompt = window.prompt = () => '192.168.1.20';
   t('ping to an IP without a valid interface fails', false, Boolean(sm.testPingFromDeviceWithPrompt(a, dm)?.success));
+});
+
+await scenario('V5 a refused domain name is not kept on the device', async ({ host, dm }, t) => {
+  const pc = host('192.168.1.10');
+  const result = dm.updateDeviceConfig(pc, { ip: '192.168.1.10', subnet: '255.255.255.0', domainName: 'bad name<>' });
+  t('config rejected', false, result.success);
+  t('domain not stored', true, pc.domainName == null);
 });
 
 // ---------- firewall: συσκευή με IP διαχείρισης ----------
