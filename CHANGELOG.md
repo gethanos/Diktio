@@ -3,7 +3,7 @@
 Όλες οι σημαντικές αλλαγές του Diktio καταγράφονται εδώ.
 Η μορφή ακολουθεί το [Keep a Changelog](https://keepachangelog.com/el/1.1.0/) και η αρίθμηση το [Semantic Versioning](https://semver.org/lang/el/).
 
-## [1.2.2] - 2026-11-14
+## [1.2.2] - Unreleased
 
 ### Διορθώθηκαν
 - DNS: ο DNS server απαντούσε για όνομα του οποίου το record είχε διαγραφεί.
@@ -127,7 +127,7 @@
 
 Πρώτη δημόσια έκδοση.
 
-[1.2.2]: https://github.com/gethanos/Diktio/compare/v1.2.1...v1.2.2
+[1.2.2]: https://github.com/gethanos/Diktio/compare/v1.2.1...main
 [1.2.1]: https://github.com/gethanos/Diktio/compare/v1.2...v1.2.1
 [1.2]: https://github.com/gethanos/Diktio/compare/v1.0...v1.2
 [1.0]: https://github.com/gethanos/Diktio/releases/tag/v1.0
