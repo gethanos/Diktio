@@ -17,6 +17,25 @@ const byType = type => dm.devices.filter(x => x.type === type).at(-1);
 const open = async device => { device.element.click(); await tick(100); };
 const escape = () => d.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape' }));
 
+// 0. DNS στο δίκτυο επίδειξης
+{
+  const pc = byType('computer'), router = byType('router'), dnsServer = byType('dns');
+  const query = name => w.simulator.testDNSQuery(pc, dnsServer, name);
+  const deleteRecord = async name => {
+    await open(dnsServer); await tick(150);
+    d.querySelector(`.dns-record-delete-btn[data-domain="${name}"]`).click(); await tick(100);
+  };
+  check('demo: PC reaches its router', true, w.simulator.simulationManager.testPing(pc, router)?.success);
+  check('DNS: first query is answered by the DNS server', 'dns-server', query('fileserver.local')?.source);
+  check('DNS: repeated query is answered from the local cache', 'cache', query('fileserver.local')?.source);
+  await deleteRecord('fileserver.local');
+  check('DNS: deleted record is not resolved (cache is forgotten)', null, query('fileserver.local'));
+  await deleteRecord('myserver.local');
+  check('DNS: a device domain name without a record is not resolved', null, query('myserver.local'));
+  pc.dns = [router.interfaces.lan.ip];
+  check('DNS: router as DNS resolver answers', '8.8.8.8', w.simulator.testDNSQuery(pc, router, 'google.com')?.ip);
+}
+
 // 1. Click-through: κάθε συσκευή της παλέτας, κάθε panel, γρήγορη δοκιμή και κουμπί
 d.querySelectorAll('.device-card').forEach(card => card.click());
 for (const type of ['router', 'switch', 'computer', 'server', 'cloud', 'printer', 'dns', 'firewall']) {

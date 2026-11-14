@@ -450,40 +450,6 @@ makeDeviceDraggable(deviceEl, device) {
         ) ?? null;
     }
     
-    // Βρείτε συσκευή με βάση το domain name
-    getDeviceByDomain(domain, globalDnsRecords) {
-        // Έλεγχος global DNS records
-        if (globalDnsRecords && globalDnsRecords[domain]) {
-            const ip = globalDnsRecords[domain];
-            return this.getDeviceByIP(ip);
-        }
-        
-        // Έλεγχος σε κάθε συσκευή για domain name
-        for (const device of this.devices) {
-            if (device.domainName === domain) {
-                return device;
-            }
-        }
-        
-        return null;
-    }
-    
-    // Βρείτε DNS server (πρώτο διαθέσιμο)
-    findDNSServer() {
-        // Πρώτα βρες DNS server συσκευή
-        const dnsDevice = this.devices.find(d => d.type === 'dns');
-        if (dnsDevice) return dnsDevice;
-        
-        // Μετά βρες router με DNS
-        const router = this.devices.find(d => d.type === 'router');
-        if (router && router.interfaces.lan.dns && router.interfaces.lan.dns.length > 0) {
-            const dnsIP = router.interfaces.lan.dns[0];
-            return this.getDeviceByIP(dnsIP);
-        }
-        
-        return null;
-    }
-    
     // ΑΠΛΗ ΣΥΝΑΡΤΗΣΗ ΕΛΕΓΧΟΥ IP - ΜΟΝΟ 0-255 ΤΑ BYTES
     simpleIPCheck(ip) {
         return !ip || ip === 'N/A' || isValidIP(ip);

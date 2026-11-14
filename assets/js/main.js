@@ -205,9 +205,8 @@ class NetworkSimulator {
 // Στο simulator.createDemoConnections() (περίπου γραμμή 180):
 createDemoConnections(router, switchDev, dnsServer, computer, server) {
     try {
-        // Χρησιμοποίησε createBasicConnection ΑΝΤΙ για createConnection
-        // για να αποφύγεις prompts
-        this.connectionManager.createBasicConnection(router, switchDev);
+        // Χωρίς prompts: η διεπαφή του router δίνεται ρητά (LAN), όπως θα την επέλεγε ο χρήστης
+        this.connectionManager.createRouterToDeviceConnectionWithInterface(router, switchDev, 'lan');
         this.connectionManager.createBasicConnection(switchDev, dnsServer);
         this.connectionManager.createBasicConnection(switchDev, computer);
         this.connectionManager.createBasicConnection(switchDev, server);
@@ -401,42 +400,44 @@ createDemoConnections(router, switchDev, dnsServer, computer, server) {
         this.uiManager.addLog(`Στη συνέχεια, θα ζητηθεί να εισαγάγετε ένα domain name`, 'info');
     }
     
+    // DNS query από συσκευή προς DNS server (DNS server ή router που προωθεί DNS):
+    // 1. τοπική cache, χωρίς πακέτο στο δίκτυο
+    // 2. πακέτο UDP/53 ως τον server (δρομολόγηση, NAT, firewall όπως κάθε πακέτο)
+    // 3. απάντηση μόνο από τα records του server, που αποθηκεύεται στην cache της συσκευής
     testDNSQuery(fromDevice, dnsServerDevice, domain) {
+        this.simulationManager.showConsole();
+        const cached = this.dnsManager.cachedAnswer(fromDevice, domain);
+        if (cached) {
+            this.uiManager.addLog(`DNS: ${domain} → ${cached.ip} από την τοπική cache του ${fromDevice.name} (δεν στάλθηκε query στον ${dnsServerDevice.name})`, 'success');
+            return cached;
+        }
+
         this.uiManager.addLog(`DNS QUERY: ${fromDevice.name} → ${dnsServerDevice.name} για "${domain}"`, 'info');
-        this.uiManager.addLog(`Πηγή DNS: ${fromDevice.dns ? fromDevice.dns[0] : 'N/A'}`, 'info');
-        
-        // 1. Έλεγχος αν ο DNS server μπορεί να λύσει DNS queries
+        this.uiManager.addLog(`Πηγή DNS: ${fromDevice.dns?.[0] ?? 'N/A'}`, 'info');
+
         if (!this.dnsManager.canResolveDNS(dnsServerDevice)) {
             this.uiManager.addLog(`DNS ERROR: Η συσκευή ${dnsServerDevice.name} δεν είναι DNS server και δεν μπορεί να λύσει DNS queries`, 'error');
             alert(`Σφάλμα: Η συσκευή ${dnsServerDevice.name} δεν είναι DNS server!`);
             return null;
         }
-        
-        // 2. DNS Query (UDP/53) από πηγή προς DNS server: δρομολόγηση, NAT και firewall όπως κάθε πακέτο
+
         const reachability = this.connectionManager.canDevicesCommunicateWithPath(fromDevice, dnsServerDevice, { protocol: 'udp', port: 53 });
         if (!reachability.canCommunicate) {
             this.uiManager.addLog(`DNS QUERY ΑΠΟΤΥΧΙΑ προς ${dnsServerDevice.name}: ${this.simulationManager.describePingFailure(reachability)}`, 'error');
             return null;
         }
-        const dnsQueryPath = reachability.path;
-        
-        // Προσομοίωση DNS query
-        this.dnsManager.visualizeDNSQuery(dnsQueryPath, fromDevice, dnsServerDevice, domain, 'query');
-        
-        // 3. DNS Resolution
-        const resolution = this.dnsManager.testDNSQuery(fromDevice, dnsServerDevice, domain, this.deviceManager);
-        
-        if (resolution) {
-            this.uiManager.addLog(`DNS RESPONSE: ${domain} → ${resolution.ip} (${resolution.source}, via ${dnsServerDevice.name})`, 'success');
-            
-            // 4. DNS Response από DNS server προς πηγή
-            this.dnsManager.visualizeDNSQuery(dnsQueryPath.reverse(), dnsServerDevice, fromDevice, domain, 'response');
-            
-            return resolution;
-        } else {
+        this.dnsManager.visualizeDNSQuery(reachability.path, fromDevice, dnsServerDevice, domain, 'query');
+
+        const ip = this.dnsManager.answer(dnsServerDevice, domain);
+        if (!ip) {
             this.uiManager.addLog(`DNS QUERY ΑΠΟΤΥΧΙΑ: Το domain "${domain}" δεν βρέθηκε στον DNS server ${dnsServerDevice.name}`, 'error');
             return null;
         }
+
+        this.dnsManager.remember(fromDevice, domain, ip);
+        this.uiManager.addLog(`DNS RESPONSE: ${domain} → ${ip} από τον ${dnsServerDevice.name}`, 'success');
+        this.dnsManager.visualizeDNSQuery([...reachability.path].reverse(), dnsServerDevice, fromDevice, domain, 'response');
+        return { ip, source: 'dns-server', dnsServer: dnsServerDevice.name };
     }
     
     // Η εμφάνιση του κουμπιού ενημερώνεται από τον UIManager (updateSimulationButton)
