@@ -41,14 +41,15 @@ test('model files: connections and ports refer to existing devices and connectio
     }
 });
 
-test('model files: a DNS setting that points to a device in the model points to a DNS server', () => {
+// Ίδιος κανόνας με την εφαρμογή (DNSManager.canResolveDNS): DNS server ή router που προωθεί DNS
+test('model files: a DNS setting that points to a device in the model points to a DNS resolver', () => {
     for (const { file } of catalogue) {
         const model = read(file);
         const owner = ip => model.devices.find(d => d.ip === ip ||
             Object.values(d.interfaces || {}).some(iface => iface.ip === ip && iface.enabled !== false));
         for (const d of model.devices.filter(d => d.type !== 'router')) {
             const target = d.dns?.[0] && owner(d.dns[0]);
-            if (target) assert.equal(target.type, 'dns', `${file}: ${d.name} uses ${target.name} (${target.type}) as DNS server`);
+            if (target) assert.ok(['dns', 'router'].includes(target.type), `${file}: ${d.name} uses ${target.name} (${target.type}) as DNS server`);
         }
     }
 });

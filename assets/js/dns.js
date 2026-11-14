@@ -87,60 +87,29 @@ class DNSManager {
         return device.type === 'dns' || device.type === 'router';
     }
     
-    // DNS resolution
-    resolveDNS(domain, sourceDevice, dnsServerDevice = null, deviceManager) {
-        // 1. Έλεγχος local cache
-        if (sourceDevice.dnsCache && sourceDevice.dnsCache[domain]) {
-            return { ip: sourceDevice.dnsCache[domain], source: 'cache', dnsServer: 'cache' };
-        }
-        
-        // 2. Βρες τον DNS server
-        let dnsDevice = dnsServerDevice;
-        if (!dnsDevice) {
-            dnsDevice = this.getConfiguredDNSServer(sourceDevice, deviceManager);
-        }
-        
-        if (!dnsDevice) {
-            return null;
-        }
-        
-        // 3. Αν ο DNS server είναι εξωτερικός (δεν υπάρχει στο δίκτυο μας)
-        if (!deviceManager.getDeviceByIP(dnsDevice.ip)) {
-            // Για εξωτερικούς DNS servers, χρησιμοποιούμε τα global records
-            if (this.globalDnsRecords[domain]) {
-                return { ip: this.globalDnsRecords[domain], source: 'external-dns', dnsServer: dnsDevice.ip };
-            }
-            return null;
-        }
-        
-        // 4. Έλεγχος αν το DNS server γνωρίζει να λύσει DNS
-        if (!this.canResolveDNS(dnsDevice)) {
-            return null;
-        }
-        
-        // 5. Έλεγχος αν το DNS server γνωρίζει το domain
-        let resolvedIP = null;
-        
-        // Έλεγχος global DNS records
-        if (this.globalDnsRecords[domain]) {
-            resolvedIP = this.globalDnsRecords[domain];
-        }
-        // Έλεγχος σε κάθε συσκευή για domain name
-        else {
-            const targetDevice = deviceManager.getDeviceByDomain(domain, this.globalDnsRecords);
-            if (targetDevice) {
-                resolvedIP = targetDevice.ip;
-            }
-        }
-        
-        // 6. Αν βρέθηκε IP, προσομοίωση cache
-        if (resolvedIP) {
-            if (!sourceDevice.dnsCache) sourceDevice.dnsCache = {};
-            sourceDevice.dnsCache[domain] = resolvedIP;
-            return { ip: resolvedIP, source: 'dns-server', dnsServer: dnsDevice.name };
-        }
-        
-        return null;
+    // Απάντηση του DNS server (DNS server ή router που προωθεί DNS): μόνο από τα records του
+    answer(dnsServerDevice, domain) {
+        return this.canResolveDNS(dnsServerDevice) ? this.globalDnsRecords[domain] ?? null : null;
+    }
+    
+    // Η συσκευή κρατά την απάντηση στην τοπική cache της
+    remember(device, domain, ip) {
+        device.dnsCache ??= {};
+        device.dnsCache[domain] = ip;
+    }
+    
+    // Απάντηση από την τοπική cache της συσκευής, χωρίς query στο δίκτυο
+    cachedAnswer(device, domain) {
+        const ip = device.dnsCache?.[domain];
+        return ip ? { ip, source: 'cache', dnsServer: null } : null;
+    }
+    
+    // Όταν ένα record αλλάζει ή διαγράφεται, οι συσκευές ξεχνούν την παλιά απάντηση.
+    // Στο πραγματικό δίκτυο αυτό γίνεται όταν λήξει το TTL· η προσομοίωση δεν έχει χρόνο.
+    forgetCachedName(domain) {
+        (window.deviceManager?.devices ?? []).forEach(device => {
+            if (device.dnsCache) delete device.dnsCache[domain];
+        });
     }
     
     // Προσθήκη DNS record
@@ -157,6 +126,7 @@ class DNSManager {
         }
         
         this.globalDnsRecords[domain] = ip;
+        this.forgetCachedName(domain);
         
         // Αν δόθηκε συγκεκριμένη συσκευή DNS, προσθήκη και στα τοπικά records
         if (device && device.type === 'dns') {
@@ -179,6 +149,7 @@ class DNSManager {
     removeDNSRecord(domain, device = null) {
         if (this.globalDnsRecords[domain]) {
             delete this.globalDnsRecords[domain];
+            this.forgetCachedName(domain);
             
             if (device && device.type === 'dns' && device.dnsRecords && device.dnsRecords[domain]) {
                 delete device.dnsRecords[domain];
@@ -227,47 +198,11 @@ class DNSManager {
         return displayRecords;
     }
     
-    // Εύρεση IP για συγκεκριμένο domain
-    lookupDomain(domain) {
-        return this.globalDnsRecords[domain] || null;
-    }
-    
-    // Διαχείριση DNS cache συσκευών
-    clearDeviceDNSCache(device) {
-        if (device.dnsCache) {
-            device.dnsCache = {};
-            return true;
-        }
-        return false;
-    }
-    
     // Καθαρισμός όλων των DNS records
     clearAllDNSRecords() {
+        Object.keys(this.globalDnsRecords).forEach(domain => this.forgetCachedName(domain));
         this.globalDnsRecords = {};
         return true;
-    }
-    
-    // Νέες μέθοδοι για UI
-    testDNSQuery(fromDevice, dnsServerDevice, domain, deviceManager) {
-        this.addLog(`DNS QUERY: ${fromDevice.name} → ${dnsServerDevice.name} για "${domain}"`, 'info');
-        this.addLog(`Πηγή DNS: ${fromDevice.dns ? fromDevice.dns[0] : 'N/A'}`, 'info');
-        
-        // 1. Έλεγχος αν ο DNS server μπορεί να λύσει DNS queries
-        if (!this.canResolveDNS(dnsServerDevice)) {
-            this.addLog(`DNS ERROR: Η συσκευή ${dnsServerDevice.name} δεν είναι DNS server`, 'error');
-            return null;
-        }
-        
-        // 2. DNS Resolution
-        const resolution = this.resolveDNS(domain, fromDevice, dnsServerDevice, deviceManager);
-        
-        if (resolution) {
-            this.addLog(`DNS RESPONSE: ${domain} → ${resolution.ip} (${resolution.source})`, 'success');
-            return resolution;
-        } else {
-            this.addLog(`DNS QUERY ΑΠΟΤΥΧΙΑ: Το domain "${domain}" δεν βρέθηκε`, 'error');
-            return null;
-        }
     }
     
     // Προσθήκη DNS record από UI

@@ -19,6 +19,11 @@ try {
   check(`ping threw: ${error.message}`, false);
 }
 try {
+  check('ping from demo PC to demo router succeeds', sim.simulationManager.testPing(byType('computer'), byType('router'))?.success);
+} catch (error) {
+  check(`ping threw: ${error.message}`, false);
+}
+try {
   const domain = Object.keys(w.dnsManager.globalDnsRecords).find(k => dm.getDeviceByIP(w.dnsManager.globalDnsRecords[k]));
   check('DNS query from demo PC resolves a local name', sim.testDNSQuery(byType('computer'), byType('dns'), domain)?.ip);
 } catch (error) {
