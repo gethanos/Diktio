@@ -215,6 +215,7 @@ await scenario('S15 auto-generated routes, router behind router', async (env, t)
 // ---------- workspace ----------
 import fs from 'node:fs';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 async function workspaceEnv(env) {
   const { w, dm, cm } = env;
   for (const k of ['FileReader', 'File', 'Blob']) globalThis[k] = w[k];
@@ -222,7 +223,7 @@ async function workspaceEnv(env) {
   const WorkspaceManager = new Function(src + '; return WorkspaceManager;')();
   const ws = w.document.getElementById('workspace');
   const simulator = {
-    deviceManager: dm, connectionManager: cm, dnsManager: { globalDnsRecords: {} },
+    deviceManager: dm, connectionManager: cm, dnsManager: new (await import(pathToFileURL(path.join(dir, 'assets/js/dns.js')).href)).default(),
     uiManager: { workspace: ws, buttons: {}, addLog() {}, setModeText() {}, updateDeviceInfo() {}, updateNetworkStats() {},
       addDeviceToWorkspace: (type, color) => dm.addDevice(type, color, 0, 0, ws) },
     clearWorkspace() { dm.devices.forEach(d => d.element.remove()); dm.devices = []; dm.deviceCounter = 1; cm.clearAllConnections(); }
@@ -316,6 +317,68 @@ await scenario('W9 predefined LAN and LAN+Internet models', async (env, t) => {
   t('WAN: Cloud -> PC (no inbound)', false, env.ping(p('Cloud (WAN) 1'), p('Υπολογιστής 4')));
 });
 
+// ---------- έλεγχος αρχείων workspace (review PR #1) ----------
+const routerData = (extra = {}) => ({ id: 'device-1', type: 'router', name: 'R', x: 0, y: 0,
+  interfaces: { wan: { ip: 'N/A', subnetMask: '255.255.255.0', gateway: '0.0.0.0', dns: [] },
+                lan: { ip: '192.168.1.1', subnetMask: '255.255.255.0', gateway: '0.0.0.0', dns: [] } },
+  routingTable: [], connectionInterfaces: {}, connections: [], ...extra });
+const pcData = (extra = {}) => ({ id: 'device-2', type: 'computer', name: 'PC', x: 200, y: 0,
+  ip: '192.168.1.10', subnetMask: '255.255.255.0', gateway: '192.168.1.1', dns: [], connections: [], ...extra });
+
+await scenario('V1 invalid nested data is rejected before the workspace is cleared', async (env, t) => {
+  const { load } = await workspaceEnv(env);
+  env.host('192.168.1.10'); env.host('192.168.1.20');
+  const attempts = {
+    'route with markup': { devices: [routerData({ routingTable: [{ network: '<img src=x onerror=alert(1)>', mask: '255.255.255.0', gateway: '0.0.0.0', interface: 'lan' }] })] },
+    'device name with markup': { devices: [pcData({ name: '<img src=x onerror=alert(1)>' })] },
+    'firewall rule with markup': { devices: [{ ...pcData({ type: 'firewall', name: 'FW' }), firewall: { policy: { outbound: 'allow', inbound: 'deny' }, rules: [{ action: 'allow', direction: 'any', protocol: 'any', port: null, source: '<b>', destination: 'any' }] } }] },
+    'DNS record with markup': { devices: [pcData()], dnsRecords: { '<script>': '1.2.3.4' } },
+    'interface IP not an address': { devices: [routerData({ interfaces: { wan: { ip: 'x' }, lan: { ip: '192.168.1.1', subnetMask: '255.255.255.0' } } })] },
+    'mask with markup on an interface without IP': { devices: [routerData({ interfaces: { wan: { ip: 'N/A', subnetMask: '"><img src=x onerror=alert(1)>' }, lan: { ip: '192.168.1.1', subnetMask: '255.255.255.0' } } })] },
+    'mask with markup on a device without IP': { devices: [pcData({ ip: 'N/A', subnetMask: '"><img src=x onerror=alert(1)>' })] },
+    'connection id with markup': { devices: [pcData({ connections: ['"><b>'] }), pcData({ id: 'device-3', connections: ['"><b>'] })], connections: [{ id: '"><b>', device1Id: 'device-2', device2Id: 'device-3' }] }
+  };
+  for (const [name, file] of Object.entries(attempts)) {
+    t(`${name}: rejected`, false, await load(file));
+    t(`${name}: current workspace kept`, 2, env.dm.devices.length);
+  }
+});
+await scenario('V2 legacy lan1 files: interface, ports and routes are renamed together', async (env, t) => {
+  const { load } = await workspaceEnv(env);
+  const router = routerData({ connections: ['c1'], connectionInterfaces: { c1: 'lan1' },
+    routingTable: [{ network: '10.0.0.0', mask: '255.0.0.0', gateway: '192.168.1.254', interface: 'lan1', metric: 1 }] });
+  router.interfaces = { wan: router.interfaces.wan, lan1: router.interfaces.lan };
+  t('loads', true, await load({ devices: [router, pcData({ connections: ['c1'] })], connections: [{ id: 'c1', device1Id: 'device-1', device2Id: 'device-2', interface1: 'lan1' }] }));
+  await new Promise(r => setTimeout(r, 300));
+  const r = env.dm.devices.find(d => d.type === 'router');
+  t('port renamed', 'lan', r.connectionInterfaces.c1);
+  t('route interface renamed', 'lan', r.routingTable[0].interface);
+  t('PC -> router works', true, env.ping(env.dm.devices.find(d => d.type === 'computer'), r));
+});
+await scenario('V3 duplicate-IP warnings follow connection changes', async ({ host, add, link, cm, dm }, t) => {
+  const a = host('192.168.1.10'), b = host('192.168.1.10'), s1 = add('switch'), s2 = add('switch');
+  link(a, s1); link(b, s2);
+  t('separate segments: no warning', false, b.hasDuplicateIP);
+  const bridge = link(s1, s2);
+  t('connected: warning shown', true, b.hasDuplicateIP);
+  cm.removeConnection(bridge);
+  t('disconnected: warning cleared', false, b.hasDuplicateIP);
+});
+await scenario('V4 typed IP must belong to an active L3 interface', async ({ host, add, link, fix, sm, dm }, t) => {
+  const a = host('192.168.1.10'), b = host('192.168.1.20'), sw = add('switch');
+  link(a, sw); link(b, sw);
+  fix(b, { subnetMask: 'not-a-mask' });
+  globalThis.prompt = window.prompt = () => '192.168.1.20';
+  t('ping to an IP without a valid interface fails', false, Boolean(sm.testPingFromDeviceWithPrompt(a, dm)?.success));
+});
+
+await scenario('V5 a refused domain name is not kept on the device', async ({ host, dm }, t) => {
+  const pc = host('192.168.1.10');
+  const result = dm.updateDeviceConfig(pc, { ip: '192.168.1.10', subnet: '255.255.255.0', domainName: 'bad name<>' });
+  t('config rejected', false, result.success);
+  t('domain not stored', true, pc.domainName == null);
+});
+
 // ---------- firewall: συσκευή με IP διαχείρισης ----------
 await scenario('F1 firewall behaves as a host on its LAN', async (env, t) => {
   const { host, add, link, fix } = env;
@@ -328,3 +391,4 @@ await scenario('F1 firewall behaves as a host on its LAN', async (env, t) => {
 const pass = results.filter(r => r.ok).length;
 process.stdout.write(`\n=== ${label}: ${pass}/${results.length} pass\n`);
 for (const r of results) process.stdout.write(`${r.ok ? 'PASS' : 'FAIL'}  ${r.name}  (expected ${r.expected}, got ${r.actual})\n`);
+process.exit(results.every(r => r.ok) ? 0 : 1);

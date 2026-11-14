@@ -3,7 +3,8 @@ import { JSDOM } from 'jsdom';
 import fs from 'node:fs'; import path from 'node:path'; import { pathToFileURL } from 'node:url';
 export async function bootApp(dir) {
   const html = fs.readFileSync(path.join(dir, 'index.html'), 'utf8');
-  const dom = new JSDOM(html.replace(/<script[\s\S]*?<\/script>/g, ''), { pretendToBeVisual: true, url: 'http://localhost/' });
+  // outside-only: τα classic scripts τρέχουν με window.eval στο κοινό global scope, όπως στον browser
+  const dom = new JSDOM(html.replace(/<script[\s\S]*?<\/script>/g, ''), { pretendToBeVisual: true, url: 'http://localhost/', runScripts: 'outside-only' });
   const w = dom.window;
   for (const k of ['window', 'document', 'navigator', 'HTMLElement', 'Node', 'localStorage', 'File', 'FileReader', 'Blob', 'Event', 'MouseEvent', 'KeyboardEvent', 'getComputedStyle', 'URL'])
     try { globalThis[k] = k === 'window' ? w : w[k]; } catch {}
@@ -26,16 +27,20 @@ export async function bootApp(dir) {
   // Το δικό του DOMContentLoaded το jsdom το στέλνει πρώτα. Τα scripts τρέχουν μετά και η εφαρμογή
   // παίρνει ένα μόνο DOMContentLoaded (το δικό μας), όπως στον browser.
   if (w.document.readyState === 'loading') await new Promise(r => w.document.addEventListener('DOMContentLoaded', r));
-  const inline = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m => m[1]);
-  // classic scripts in order
-  for (const src of [...html.matchAll(/<script src="([^"]+)"><\/script>/g)].map(m => m[1])) {
-    new Function('window', 'document', fs.readFileSync(path.join(dir, src), 'utf8') + ';' +
-      (src.includes('workspace-manager') ? 'window.WorkspaceManager=WorkspaceManager;' : ''))(w, w.document);
+  // Classic και inline scripts με τη σειρά του index.html. Οι δηλώσεις τους (π.χ. class WorkspaceManager)
+  // είναι ορατές από τα modules, όπως στον browser.
+  const scripts = [...html.matchAll(/<script(?: src="([^"]+)")?>([\s\S]*?)<\/script>/g)];
+  const declared = new Set();
+  for (const [, src, inline] of scripts) {
+    const code = src ? fs.readFileSync(path.join(dir, src), 'utf8') : inline;
+    for (const [, name] of code.matchAll(/^(?:class|function)\s+([A-Za-z_$][\w$]*)/gm)) declared.add(name);
+    try { w.eval(code); } catch (e) { errors.push(`SCRIPT ${src ?? 'inline'}: ${e.message}`); }
   }
-  for (const code of inline) { try { new Function('window', 'document', code)(w, w.document); } catch (e) { errors.push('INLINE ' + e.message); } }
+  for (const name of declared) globalThis[name] ??= w.eval(`typeof ${name} === 'undefined' ? undefined : ${name}`);
   for (const src of [...html.matchAll(/<script type="module" src="([^"]+)"><\/script>/g)].map(m => m[1]))
     await import(pathToFileURL(path.join(dir, src)).href);
   w.document.dispatchEvent(new w.Event('DOMContentLoaded'));
+  w.dispatchEvent(new w.Event('load'));
   const tick = (ms = 50) => new Promise(r => setTimeout(r, ms));
   await tick(2500);
   return { w, errors, tick };

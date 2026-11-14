@@ -135,10 +135,12 @@ function selectRoute(device, destinationIP) {
         const maskInt = ipToInt(mask);
         if (((destination & maskInt) >>> 0) !== ((ipToInt(network) & maskInt) >>> 0)) return;
 
+        // Με ορισμένη διεπαφή η διαδρομή βγαίνει μόνο από αυτήν και το gateway πρέπει να είναι on-link εκεί.
+        // Χωρίς διεπαφή (gateway host, παλιά αρχεία) επιλέγεται η διεπαφή όπου το gateway είναι on-link.
         const directlyConnected = !hasAddress(gateway);
-        const iface = directlyConnected
-            ? interfaces.find(candidate => candidate.name === ifaceName)
-            : interfaces.find(candidate => isOnLink(gateway, candidate.ip, candidate.mask));
+        const iface = interfaces.find(candidate =>
+            (ifaceName ? candidate.name === ifaceName : !directlyConnected) &&
+            (directlyConnected || isOnLink(gateway, candidate.ip, candidate.mask)));
         if (!iface) return;
 
         candidates.push({
@@ -154,7 +156,8 @@ function selectRoute(device, destinationIP) {
     if (device.type === 'router') {
         (device.routingTable || []).forEach(route =>
             addRoute(route.network, route.mask, route.gateway, route.metric, route.interface));
-        addRoute('0.0.0.0', '0.0.0.0', device.interfaces?.wan?.gateway, 100);
+        const wanGateway = device.interfaces?.wan?.gateway;
+        if (hasAddress(wanGateway)) addRoute('0.0.0.0', '0.0.0.0', wanGateway, 100, 'wan');
     } else {
         addRoute('0.0.0.0', '0.0.0.0', device.gateway, 100);
     }
@@ -234,6 +237,11 @@ function ping(topology, source, target, { protocol = 'icmp', port = null, target
     const request = tracePacket(topology, source, targetIP, { protocol, port, sessions });
     if (!request.ok) return { ...request, targetIP };
 
+    // Το πακέτο παραδίδεται σε όποια συσκευή έχει την IP. Αν αυτή δεν είναι ο στόχος (ίδια IP σε άλλο
+    // σημείο του δικτύου), ο στόχος δεν απάντησε.
+    const reached = request.path.at(-1);
+    if (reached !== target) return { ok: false, reason: 'other-host', detail: reached.name, at: reached, targetIP, path: request.path };
+
     const reply = tracePacket(topology, target, request.sourceIP, {
         sourceIP: targetIP,
         natReverse: request.translations,
@@ -242,6 +250,8 @@ function ping(topology, source, target, { protocol = 'icmp', port = null, target
         sessions
     });
     if (!reply.ok) return { ...reply, ok: false, reason: `reply-${reply.reason}`, targetIP, path: request.path };
+    const replied = reply.path.at(-1);
+    if (replied !== source) return { ok: false, reason: 'reply-other-host', detail: replied.name, at: replied, targetIP, path: request.path };
 
     return { ok: true, path: request.path, sourceIP: request.sourceIP, targetIP, translations: request.translations };
 }

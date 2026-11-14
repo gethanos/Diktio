@@ -49,7 +49,7 @@ test('rule validation', () => {
     assert.deepEqual(createRule({}), { action: 'allow', direction: 'any', protocol: 'any', port: null, source: 'any', destination: 'any' });
 });
 
-// PC — switch — router(LAN) ... router(LAN2) — outside[FW]inside — switch — server
+// PC - switch - router(LAN) ... router(LAN2) - outside[FW]inside - switch - server
 function protectedServer(rules) {
     const devices = [];
     const connections = [];

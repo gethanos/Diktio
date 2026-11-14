@@ -3,6 +3,7 @@
 
 import { loadBranch } from './env.mjs';
 import fs from 'node:fs'; import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 const [mainDir, propDir] = process.argv.slice(2);
 async function wsEnv(dir) {
   const env = await loadBranch(dir);
@@ -11,7 +12,7 @@ async function wsEnv(dir) {
   const WM = new Function(fs.readFileSync(path.join(dir, 'assets/js/workspace-manager.js'), 'utf8') + ';return WorkspaceManager;')();
   const ws = w.document.getElementById('workspace');
   const notes = [];
-  const sim = { deviceManager: dm, connectionManager: cm, dnsManager: { globalDnsRecords: {} },
+  const sim = { deviceManager: dm, connectionManager: cm, dnsManager: new (await import(pathToFileURL(path.join(dir, 'assets/js/dns.js')).href)).default(),
     uiManager: { workspace: ws, buttons: {}, addLog: (m, t) => notes.push(`${t}: ${m}`), setModeText() {}, updateDeviceInfo() {}, updateNetworkStats() {},
       addDeviceToWorkspace: (t, c) => dm.addDevice(t, c, 0, 0, ws) },
     clearWorkspace() { dm.devices.forEach(d => d.element.remove()); dm.devices = []; dm.deviceCounter = 1; cm.clearAllConnections(); } };

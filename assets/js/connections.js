@@ -541,7 +541,7 @@ canAcceptConnection(device, requestedInterface = null) {
             
             connection.interface1 = interface1;
             connection.interface2 = interface2;
-            this.refreshConnectionStatus(connection);
+            this.updateAllConnections(window.deviceManager.devices);
             
             console.log(`[ROUTER↔ROUTER] Δημιουργήθηκε: ${router1.name} (${interface1}) ↔ ${router2.name} (${interface2})`);
             
@@ -638,7 +638,7 @@ canAcceptConnection(device, requestedInterface = null) {
         
         if (device1.type === 'firewall') this.assignFirewallPort(device1, connection, device2);
         if (device2.type === 'firewall') this.assignFirewallPort(device2, connection, device1);
-        this.refreshConnectionStatus(connection);
+        this.updateAllConnections(window.deviceManager.devices);
         
         console.log(`[BASIC CONNECTION] Δημιουργήθηκε: ${device1.name} ↔ ${device2.name} (${connection.canCommunicate ? 'ΕΠΙΚΟΙΝΩΝΙΑ ΔΥΝΑΤΗ' : 'ΧΩΡΙΣ ΕΠΙΚΟΙΝΩΝΙΑ'})`);
         
@@ -844,7 +844,7 @@ createRouterToDeviceConnectionWithInterface(router, otherDevice, interfaceType) 
         
         // Ενημέρωση IP της συσκευής αν χρειάζεται
         this.updateDeviceIPForRouterInterface(otherDevice, router, interfaceType);
-        this.refreshConnectionStatus(connection);
+        this.updateAllConnections(window.deviceManager.devices);
         
         // Ενημέρωση UI
         if (window.uiManager) {
@@ -951,7 +951,7 @@ updateDeviceIPForRouterInterface(device, router, interfaceType) {
         device1.connections.push(connectionId);
         device2.connections.push(connectionId);
         
-        this.refreshConnectionStatus(connection);
+        this.updateAllConnections(window.deviceManager.devices);
         
         console.log(`[ΣΥΝΔΕΣΗ] Δημιουργήθηκε με ID: ${connectionId}`);
         
@@ -1060,13 +1060,17 @@ removeConnection(connection) {
     
     console.log(`[CONNECTION] Σύνδεση διαγράφηκε επιτυχώς: ${connection.id}`);
     
+    // Η διαγραφή αλλάζει την επικοινωνία και των υπόλοιπων συσκευών
+    this.updateAllConnections(window.deviceManager.devices);
     return connection;
 }
     // ==================== ΜΕΘΟΔΟΙ ΕΝΗΜΕΡΩΣΗΣ ΚΑΙ ΟΠΤΙΚΟΠΟΙΗΣΗΣ ====================
     
+    // Μετά από κάθε αλλαγή τοπολογίας ή ρυθμίσεων: κατάσταση όλων των συνδέσεων και διπλότυπες IP
     updateAllConnections(devices) {
         devices.forEach(device => { device.connections ??= []; });
         this.connections.forEach(connection => this.refreshConnectionStatus(connection));
+        window.deviceManager?.refreshDuplicateIPWarnings();
         this.updateConnectionsVisual();
     }
     

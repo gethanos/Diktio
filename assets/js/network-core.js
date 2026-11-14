@@ -157,6 +157,12 @@ function generateRandomSubnetMask() {
     return intToIp((0xFFFFFFFF << (32 - prefix)) >>> 0);
 }
 
+// Όνομα host/domain (RFC 1123): ετικέτες από γράμματα, ψηφία και '-', χωρισμένες με '.'
+function isValidHostname(name) {
+    return typeof name === 'string' && name.length <= 253 &&
+        /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*$/i.test(name);
+}
+
 // RFC 1918 ιδιωτικές, loopback και link-local διευθύνσεις
 function isPrivateIP(ip) {
     return ['10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16', '127.0.0.0/8', '169.254.0.0/16']
@@ -173,6 +179,7 @@ export {
     areInSameNetwork,
     isOnLink,
     isValidIP,
+    isValidHostname,
     isValidSubnetMask,
     getNetworkInfo,
     isUsableHostAddress,

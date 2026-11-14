@@ -455,7 +455,8 @@ class SimulationManager {
         }
 
         if (isValidIP(input)) {
-            const target = deviceManager.getDeviceByIP(input);
+            // Μόνο συσκευή με ενεργή διεπαφή L3 σε αυτή την IP (όχι π.χ. IP με άκυρη μάσκα)
+            const target = candidates.find(d => getL3Interfaces(d).some(iface => iface.ip === input));
             if (target) return this.testPing(fromDevice, target, { ...service, targetIP: input });
             this.addLog(`${action} ${fromDevice.name} → ${input} - ΑΠΟΤΥΧΙΑ: καμία συσκευή δεν έχει αυτή την IP, δεν υπάρχει απάντηση`, 'error');
             return { success: false };
@@ -584,7 +585,8 @@ class SimulationManager {
             'ip-conflict': 'διπλότυπη IP στο ίδιο δίκτυο',
             'not-a-router': 'το gateway δεν είναι router',
             'ttl-expired': 'βρόχος δρομολόγησης (TTL expired)',
-            'firewall-blocked': `μπλοκαρίστηκε από firewall (${result.detail})`
+            'firewall-blocked': `μπλοκαρίστηκε από firewall (${result.detail})`,
+            'other-host': `την ίδια IP έχει άλλη συσκευή, ${result.detail}, που έλαβε το πακέτο`
         };
         const isReply = result.reason?.startsWith('reply-');
         const reason = reasons[isReply ? result.reason.slice('reply-'.length) : result.reason] ?? result.reason;
