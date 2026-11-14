@@ -199,3 +199,23 @@ test('no NAT on a private WAN link: the far side needs a return route', () => {
     assert.equal(result.ok, false);
     assert.equal(result.reason, 'reply-no-route');
 });
+
+test('ping reaches the chosen device, not another device with the same IP', () => {
+    const { canPing, host, a, b } = twoLans();
+    const twin = host('192.168.2.20', '192.168.2.1');          // ίδια IP με τον b, χωρίς σύνδεση
+    const result = canPing(a, twin);
+    assert.equal(result.ok, false);
+    assert.equal(result.reason, 'other-host');
+    assert.equal(result.at, b);
+});
+
+test('a static route leaves through its configured interface', () => {
+    const r = { type: 'router', routingTable: [], interfaces: {
+        wan: { ip: '10.0.0.1', subnetMask: '255.255.0.0', gateway: '0.0.0.0' },
+        lan: { ip: '10.0.1.1', subnetMask: M24 },
+        lan2: { ip: 'N/A', subnetMask: M24 } } };
+    r.routingTable = [{ network: '172.16.0.0', mask: M24, gateway: '10.0.1.254', interface: 'lan', metric: 1 }];
+    assert.equal(selectRoute(r, '172.16.0.5').iface.name, 'lan');
+    r.routingTable = [{ network: '172.16.0.0', mask: M24, gateway: '10.0.1.254', interface: 'lan2', metric: 1 }];
+    assert.equal(selectRoute(r, '172.16.0.5'), null, 'gateway not on-link on the configured interface');
+});

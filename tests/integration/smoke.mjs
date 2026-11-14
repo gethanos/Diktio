@@ -1,46 +1,34 @@
 // Εκτέλεση: node tests/integration/smoke.mjs [repo-dir]   (εκκινεί όλη την εφαρμογή σε jsdom)
+// Αποτυγχάνει (exit 1) αν η εκκίνηση βγάλει σφάλμα ή αν δεν περάσει κάποιος από τους βασικούς ελέγχους.
+import { bootApp } from './app.mjs';
 
-import { JSDOM } from 'jsdom';
-import fs from 'node:fs'; import path from 'node:path'; import { pathToFileURL } from 'node:url';
 const dir = process.argv[2] ?? '.';
-const html = fs.readFileSync(path.join(dir, 'index.html'), 'utf8').replace(/<script[\s\S]*?<\/script>/g, '');
-const dom = new JSDOM(html, { pretendToBeVisual: true, url: 'http://localhost/' });
-const w = dom.window;
-for (const k of ['window', 'document', 'navigator', 'HTMLElement', 'Node', 'localStorage', 'File', 'FileReader', 'Blob', 'Event', 'MouseEvent', 'KeyboardEvent', 'getComputedStyle'])
-  try { globalThis[k] = k === 'window' ? w : w[k]; } catch {}
-globalThis.alert = w.alert = () => {}; globalThis.prompt = w.prompt = (_, d) => d; globalThis.confirm = w.confirm = () => true;
-globalThis.requestAnimationFrame = w.requestAnimationFrame = f => setTimeout(f, 16);
-globalThis.fetch = w.fetch = async (u) => ({ ok: true, json: async () => JSON.parse(fs.readFileSync(path.join(dir, String(u)), 'utf8')) });
-const errors = [];
-const origErr = console.error; console.log = () => {}; console.warn = () => {}; console.info = () => {}; console.trace = () => {};
-console.error = (...a) => errors.push(a.map(String).join(' ').slice(0, 200));
-process.on('uncaughtException', e => errors.push('UNCAUGHT ' + e.message));
-// inline CONFIG script from index.html
-const cfg = fs.readFileSync(path.join(dir, 'index.html'), 'utf8').match(/<script>\s*(\/\/[^\n]*\n)?\s*window\.CONFIG[\s\S]*?<\/script>/);
-if (cfg) new Function('window', cfg[0].replace(/<\/?script>/g, ''))(w);
-new Function('window', 'document', fs.readFileSync(path.join(dir, 'assets/js/workspace-manager.js'), 'utf8') + ';window.WorkspaceManager=WorkspaceManager;')(w, w.document);
-await import(pathToFileURL(path.join(dir, 'assets/js/main.js')).href);
-w.document.dispatchEvent(new w.Event('DOMContentLoaded'));
-await new Promise(r => setTimeout(r, 2500));
-const sim = w.simulator;
+const { w, errors, tick } = await bootApp(dir);
+const checks = [];
+const check = (name, ok) => checks.push({ name, ok: Boolean(ok) });
+
 const dm = w.deviceManager;
-const out = { devices: dm?.devices.length, errors };
-if (sim && dm) {
-  const by = t => dm.devices.find(d => d.type === t);
-  const pc = by('computer'), srv = by('server'), dns = by('dns');
-  try { out.pingPcServer = sim.simulationManager.testPing(pc, srv)?.success; } catch (e) { out.pingPcServer = 'THROW ' + e.message; }
-  try { out.autoDNS = typeof sim.testAutoDNS === 'function' ? (sim.testAutoDNS(), 'ran') : 'missing'; } catch (e) { out.autoDNS = 'THROW ' + e.message; }
-  try {
-    const ui = sim.uiManager;
-    const recs = sim.dnsManager.globalDnsRecords;
-    const domain = Object.keys(recs).find(k => dm.getDeviceByIP(recs[k]));
-    globalThis.prompt = w.prompt = () => domain;
-    ui.manualDNSMode = true; ui.dnsSourceDevice = null;
-    ui.handleManualDNSModeClick(pc); ui.handleManualDNSModeClick(dns);
-    out.manualDNSDomain = domain;
-  } catch (e) { out.manualDNS = 'THROW ' + e.message; }
-  try { out.autoRoutes = typeof sim.autoConfigureRouting; } catch {}
+const sim = w.simulator;
+check('simulator, device manager and workspace manager exist', sim && dm && w.workspaceManager);
+check('demo network has 5 devices', dm?.devices.length === 5);
+
+const byType = type => dm?.devices.find(d => d.type === type);
+try {
+  check('ping from demo PC to demo server succeeds', sim.simulationManager.testPing(byType('computer'), byType('server'))?.success);
+} catch (error) {
+  check(`ping threw: ${error.message}`, false);
 }
-await new Promise(r => setTimeout(r, 3000));
-origErr(JSON.stringify(out, null, 1));
-process.exit(0);
+try {
+  const domain = Object.keys(w.dnsManager.globalDnsRecords).find(k => dm.getDeviceByIP(w.dnsManager.globalDnsRecords[k]));
+  check('DNS query from demo PC resolves a local name', sim.testDNSQuery(byType('computer'), byType('dns'), domain)?.ip);
+} catch (error) {
+  check(`DNS query threw: ${error.message}`, false);
+}
+await tick(1500);
+check('no uncaught errors or console.error', errors.length === 0);
+
+for (const { name, ok } of checks) process.stdout.write(`${ok ? 'PASS' : 'FAIL'}  ${name}\n`);
+for (const error of errors) process.stdout.write(`      ${error}\n`);
+const failed = checks.filter(c => !c.ok).length;
+process.stdout.write(`=== smoke: ${checks.length - failed}/${checks.length} pass\n`);
+process.exit(failed ? 1 : 0);

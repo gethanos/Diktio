@@ -21,7 +21,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-import { isValidIP } from './network-core.js';
+import { isValidIP, isValidHostname } from './network-core.js';
 
 // Διαχείριση DNS
 class DNSManager {
@@ -152,6 +152,9 @@ class DNSManager {
         if (!domain || domain.trim() === '') {
             throw new Error('Το όνομα domain δεν μπορεί να είναι κενό');
         }
+        if (!isValidHostname(domain)) {
+            throw new Error(`Μη έγκυρο όνομα domain: ${domain} (γράμματα, ψηφία, '-' και '.', π.χ. www.lab.local)`);
+        }
         
         this.globalDnsRecords[domain] = ip;
         
@@ -164,6 +167,14 @@ class DNSManager {
         return { domain, ip };
     }
     
+    // DNS records από αρχείο workspace: { domain: ip }. Επιστρέφει μήνυμα σφάλματος ή null.
+    validateRecords(records) {
+        if (records === undefined) return null;
+        if (!records || typeof records !== 'object' || Array.isArray(records)) return 'τα DNS records πρέπει να είναι αντικείμενο';
+        const invalid = Object.entries(records).find(([domain, ip]) => !isValidHostname(domain) || !isValidIP(ip));
+        return invalid ? `μη έγκυρο DNS record: ${String(invalid[0]).slice(0, 60)}` : null;
+    }
+
     // Αφαίρεση DNS record
     removeDNSRecord(domain, device = null) {
         if (this.globalDnsRecords[domain]) {

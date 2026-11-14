@@ -21,8 +21,8 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-import { isValidIP, isValidSubnetMask, isOnLink, isUsableHostAddress, generateRandomIP, getNetworkAddress } from './network-core.js';
-import { createFirewallConfig, createRule, validateRule } from './firewall.js';
+import { isValidIP, isValidHostname, isValidSubnetMask, isOnLink, isUsableHostAddress, generateRandomIP, getNetworkAddress } from './network-core.js';
+import { FIREWALL_PORTS, createFirewallConfig, createRule, validateRule } from './firewall.js';
 
 // Διαχείριση συσκευών
 class DeviceManager {
@@ -553,7 +553,6 @@ makeDeviceDraggable(deviceEl, device) {
             `LAN2: ${router.interfaces.lan2.ip}${router.interfaces.lan2.enabled ? '' : ' (ανενεργό)'}`;
 
         window.connectionManager?.updateAllConnections(this.devices);
-        this.refreshDuplicateIPWarnings();
         return { success: true, router };
     }
     
@@ -590,7 +589,6 @@ updateStandardDeviceConfig(device, configData) {
         }
 
         window.connectionManager?.updateAllConnections(this.devices);
-        this.refreshDuplicateIPWarnings();
         return { success: true, device };
     }    
 // Βοηθητική συνάρτηση για ενημέρωση από UI
@@ -821,6 +819,58 @@ updateDeviceConfigFromUI(device) {
         if (index <= 0 || index >= rules.length) return;
         [rules[index - 1], rules[index]] = [rules[index], rules[index - 1]];
         window.connectionManager?.updateAllConnections(this.devices);
+    }
+
+    // Συσκευή από αρχείο workspace, πριν αλλάξει οτιδήποτε. Επιστρέφει μήνυμα σφάλματος ή null.
+    // Δεκτές είναι μόνο τιμές που μπορεί να παραγάγει και η εφαρμογή, οπότε καμία τιμή του αρχείου
+    // δεν μπορεί να γίνει markup όταν εμφανίζεται στο περιβάλλον.
+    validateDeviceData(device) {
+        const ports = { router: ['wan', 'lan', 'lan2'], firewall: FIREWALL_PORTS };
+        const isAddress = value => value === 'N/A' || isValidIP(value);
+        const isOptionalIP = value => value === undefined || value === '' || isValidIP(value);
+        const isIPList = value => value === undefined || (Array.isArray(value) && value.every(isValidIP));
+
+        if (typeof device.name !== 'string' || !/^[^<>"'`]{1,64}$/.test(device.name)) {
+            return 'μη έγκυρο όνομα (1-64 χαρακτήρες, χωρίς < > " \' `)';
+        }
+        if (!(device.connections ?? []).every(id => typeof id === 'string')) return 'μη έγκυρη λίστα συνδέσεων';
+        if (!Object.values(device.connectionInterfaces ?? {}).every(port => (ports[device.type] ?? []).includes(port))) {
+            return 'μη έγκυρη διεπαφή σύνδεσης';
+        }
+
+        if (device.type === 'router') {
+            for (const [name, iface] of Object.entries(device.interfaces ?? {})) {
+                if (!ports.router.includes(name)) return `άγνωστη διεπαφή ${String(name).slice(0, 20)}`;
+                if (!isAddress(iface?.ip) || (isValidIP(iface.ip) && !isValidSubnetMask(iface.subnetMask)) ||
+                    !isOptionalIP(iface.gateway) || !isIPList(iface.dns) ||
+                    (iface.enabled !== undefined && typeof iface.enabled !== 'boolean')) {
+                    return `μη έγκυρες ρυθμίσεις διεπαφής ${name.toUpperCase()}`;
+                }
+            }
+            const routesValid = (device.routingTable ?? []).every(route =>
+                isValidIP(route?.network) && isValidSubnetMask(route.mask, { allowZero: true }) && isValidIP(route.gateway) &&
+                (route.interface === undefined || ports.router.includes(route.interface)) &&
+                (route.metric === undefined || Number.isFinite(route.metric)));
+            return routesValid ? null : 'μη έγκυρη διαδρομή στον πίνακα δρομολόγησης';
+        }
+
+        if (!isAddress(device.ip ?? 'N/A') || (isValidIP(device.ip) && !isValidSubnetMask(device.subnetMask)) ||
+            !isOptionalIP(device.gateway) || !isIPList(device.dns)) {
+            return 'μη έγκυρη IP, μάσκα, gateway ή DNS';
+        }
+        if (device.domainName != null && !isValidHostname(device.domainName)) return 'μη έγκυρο domain name';
+
+        if (device.firewall !== undefined) {
+            const { policy, rules } = device.firewall ?? {};
+            const decisions = ['allow', 'deny'];
+            if (!decisions.includes(policy?.outbound) || !decisions.includes(policy?.inbound) || !Array.isArray(rules)) {
+                return 'μη έγκυρη πολιτική firewall';
+            }
+            const invalid = rules.find(rule => !rule || typeof rule.source !== 'string' || typeof rule.destination !== 'string' ||
+                (rule.port !== null && !Number.isInteger(rule.port)) || validateRule(rule));
+            if (invalid) return 'μη έγκυρος κανόνας firewall';
+        }
+        return null;
     }
 }
 

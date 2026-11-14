@@ -315,41 +315,52 @@ class WorkspaceManager {
         });
     }
 
-    // Ολόκληρος ο έλεγχος γίνεται ΠΡΙΝ καθαριστεί το τρέχον workspace.
-    // Σφάλματα συσκευών ακυρώνουν τη φόρτωση. Συνδέσεις προς ανύπαρκτες συσκευές
-    // (υπάρχουν στα Simple_Lan.json, predefined-lan.json) αφαιρούνται με προειδοποίηση.
-    // Επιστρέφει { data, warnings } με καθαρισμένα δεδομένα, χωρίς να αλλάζει το αρχικό.
+    // Ολόκληρος ο έλεγχος γίνεται ΠΡΙΝ καθαριστεί το τρέχον workspace: δομή αρχείου, ρυθμίσεις κάθε
+    // συσκευής (DeviceManager.validateDeviceData) και DNS records. Οποιοδήποτε σφάλμα ακυρώνει τη φόρτωση.
+    // Συνδέσεις προς ανύπαρκτες συσκευές αφαιρούνται με προειδοποίηση.
+    // Επιστρέφει { data, warnings } με κανονικοποιημένα δεδομένα, χωρίς να αλλάζει το αρχικό.
     validateWorkspace(data) {
         if (!data || !Array.isArray(data.devices)) {
             throw new Error('Μη έγκυρο αρχείο: λείπει ο πίνακας "devices"');
         }
+        const { deviceManager, dnsManager } = this.simulator;
         const knownTypes = Object.keys(window.CONFIG?.DEVICE_TYPES || {});
         const ids = new Set();
 
-        data.devices.forEach((device, index) => {
-            if (typeof device.id !== 'string' || ids.has(device.id)) {
+        const normalized = data.devices.map((device, index) => {
+            if (!device || typeof device.id !== 'string' || ids.has(device.id)) {
                 throw new Error(`Μη έγκυρο αρχείο: η συσκευή #${index + 1} δεν έχει id ή το id της επαναλαμβάνεται`);
             }
             ids.add(device.id);
             if (!knownTypes.includes(device.type)) {
-                throw new Error(`Μη έγκυρο αρχείο: άγνωστος τύπος συσκευής "${device.type}"`);
+                throw new Error(`Μη έγκυρο αρχείο: άγνωστος τύπος συσκευής στη συσκευή #${index + 1}`);
             }
             if (device.type === 'router' && !(device.interfaces?.wan && (device.interfaces.lan || device.interfaces.lan1))) {
-                throw new Error(`Μη έγκυρο αρχείο: ο router "${device.name || device.id}" δεν έχει διεπαφές WAN/LAN`);
+                throw new Error(`Μη έγκυρο αρχείο: ο router #${index + 1} δεν έχει διεπαφές WAN/LAN`);
             }
+            const normalizedDevice = this.normalizeDeviceData(device);
+            const error = deviceManager.validateDeviceData(normalizedDevice);
+            if (error) throw new Error(`Μη έγκυρο αρχείο: συσκευή #${index + 1}: ${error}`);
+            return normalizedDevice;
         });
+
+        const dnsError = dnsManager.validateRecords(data.dnsRecords);
+        if (dnsError) throw new Error(`Μη έγκυρο αρχείο: ${dnsError}`);
 
         const warnings = [];
         const connectionIds = new Set();
         const connections = (data.connections || []).filter(conn => {
-            if (connectionIds.has(conn.id)) throw new Error(`Μη έγκυρο αρχείο: διπλότυπο id σύνδεσης ${conn.id}`);
+            if (!conn || typeof conn.id !== 'string' || connectionIds.has(conn.id)) {
+                throw new Error('Μη έγκυρο αρχείο: σύνδεση χωρίς id ή με διπλότυπο id');
+            }
             connectionIds.add(conn.id);
             if (ids.has(conn.device1Id) && ids.has(conn.device2Id)) return true;
             warnings.push(`Η σύνδεση ${conn.id} αναφέρεται σε συσκευή που δεν υπάρχει και παραλείφθηκε`);
             return false;
-        });
+        }).map(conn => ({ ...conn, interface1: this.normalizePort(conn.interface1), interface2: this.normalizePort(conn.interface2) }));
+
         const validIds = new Set(connections.map(conn => conn.id));
-        const devices = data.devices.map(device => ({
+        const devices = normalized.map(device => ({
             ...device,
             connections: (device.connections || []).filter(id => validIds.has(id)),
             connectionInterfaces: Object.fromEntries(
@@ -359,13 +370,24 @@ class WorkspaceManager {
         return { data: { ...data, devices, connections }, warnings };
     }
 
-    // Παλιά αρχεία: interfaces.lan1 → lan, απουσία lan2
+    // Παλιά αρχεία έλεγαν τη διεπαφή LAN «lan1»
+    normalizePort(port) {
+        return port === 'lan1' ? 'lan' : port;
+    }
+
+    // Παλιά αρχεία: interfaces.lan1 → lan (και στις αναφορές συνδέσεων και διαδρομών), απουσία lan2
     normalizeDeviceData(deviceData) {
         if (deviceData.type !== 'router') return deviceData;
         const { lan1, ...interfaces } = deviceData.interfaces;
         interfaces.lan ??= lan1;
         interfaces.lan2 ??= { ip: 'N/A', subnetMask: '255.255.255.0', gateway: '0.0.0.0', dns: [], enabled: false };
-        return { ...deviceData, interfaces };
+        return {
+            ...deviceData,
+            interfaces,
+            connectionInterfaces: Object.fromEntries(Object.entries(deviceData.connectionInterfaces || {})
+                .map(([id, port]) => [id, this.normalizePort(port)])),
+            routingTable: (deviceData.routingTable || []).map(route => ({ ...route, interface: this.normalizePort(route.interface) }))
+        };
     }
 
     // Κοινή διαδρομή επαναφοράς για ήδη ελεγμένα δεδομένα (από validateWorkspace)
@@ -376,12 +398,11 @@ class WorkspaceManager {
         this.closePropertiesPanel();
         this.simulator.clearWorkspace();
 
-        data.devices.map(d => this.normalizeDeviceData(d)).forEach(d => this.restoreDevice(d));
+        data.devices.forEach(d => this.restoreDevice(d));
         this.simpleRestoreConnections(data);
         Object.assign(dnsManager.globalDnsRecords, data.dnsRecords || {});
 
         connectionManager.updateAllConnections(deviceManager.devices);
-        deviceManager.refreshDuplicateIPWarnings?.();
         this.closePropertiesPanel();
         uiManager.updateDeviceInfo?.(null);
         uiManager.updateNetworkStats?.();

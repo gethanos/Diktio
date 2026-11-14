@@ -24,6 +24,10 @@
 import { subnetMaskToCIDR } from './network-core.js';
 import { FIREWALL_PORTS, describeRule } from './firewall.js';
 
+// Κείμενο μέσα σε HTML template. Τα δεδομένα αρχείων ελέγχονται ήδη στη φόρτωση· εδώ είναι δεύτερη άμυνα.
+const escapeHTML = value => String(value).replace(/[&<>"']/g, ch =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]);
+
 // Διαχείριση User Interface - ΒΕΛΤΙΩΜΕΝΟ ΓΙΑ COMPACT DESIGN
 class UIManager {
     constructor(deviceManager, connectionManager, dnsManager, simulationManager) {
@@ -1780,8 +1784,8 @@ removeConnectionById(connId) {
             <div class="interface-item">
                 <div class="interface-item-content">
                     <div class="interface-item-details">
-                        <div class="interface-device-name">${route.network}/${subnetMaskToCIDR(route.mask)}</div>
-                        <div class="interface-info">${route.gateway === '0.0.0.0' ? 'απευθείας συνδεδεμένο' : `μέσω ${route.gateway}`} • ${String(route.interface).toUpperCase()} • metric ${route.metric ?? 0}</div>
+                        <div class="interface-device-name">${escapeHTML(route.network)}/${subnetMaskToCIDR(route.mask)}</div>
+                        <div class="interface-info">${route.gateway === '0.0.0.0' ? 'απευθείας συνδεδεμένο' : `μέσω ${escapeHTML(route.gateway)}`} • ${escapeHTML(String(route.interface).toUpperCase())} • metric ${escapeHTML(route.metric ?? 0)}</div>
                     </div>
                     <button class="btn btn-sm btn-danger" data-route-index="${index}" title="Διαγραφή διαδρομής">
                         <i class="fas fa-times"></i>
@@ -1869,7 +1873,7 @@ removeConnectionById(connId) {
             return `
                 <div class="info-item">
                     <strong class="text-tertiary">${port === 'inside' ? 'Inside (εσωτερικό)' : 'Outside (εξωτερικό)'}:</strong><br>
-                    <span>${peer ? peer.name : 'ελεύθερη'}</span>
+                    <span>${peer ? escapeHTML(peer.name) : 'ελεύθερη'}</span>
                 </div>`;
         }).join('');
 
@@ -1877,7 +1881,7 @@ removeConnectionById(connId) {
             <div class="interface-item">
                 <div class="interface-item-content">
                     <div class="interface-item-details">
-                        <div class="interface-info">${index + 1}. ${describeRule(rule)}</div>
+                        <div class="interface-info">${index + 1}. ${escapeHTML(describeRule(rule))}</div>
                     </div>
                     <button class="btn btn-sm btn-secondary" data-rule-up="${index}" title="Μετακίνηση πάνω" ${index === 0 ? 'disabled' : ''}>
                         <i class="fas fa-arrow-up"></i>
